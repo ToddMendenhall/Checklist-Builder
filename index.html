@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Checklist Collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="collection-header">
+      <div class="header-top">
+        <button id="themeToggle" class="theme-toggle" type="button">Instrument</button>
+      </div>
+      <div class="cy-logo-wrap">
+        <img class="cy-logo cy-logo-light" src="/assets/logo-light.png" alt="Cypressili">
+        <img class="cy-logo cy-logo-dark" src="/assets/logo-dark.png" alt="Cypressili">
+      </div>
+      <input id="collectionTitleInput" class="collection-title-input" value="Site Inspection Collection" aria-label="Collection title">
+      <textarea id="collectionDescInput" class="collection-desc-input" rows="2" placeholder="Describe this collection of checklists…"></textarea>
+    </header>
+
+    <div class="tab-bar" id="tabBar" role="tablist" aria-label="Checklists"></div>
+
+    <div class="checklist-subheader">
+      <input id="checklistTitleInput" class="checklist-title-input" aria-label="Checklist title">
+      <div class="meta-row">
+        <label class="meta-field">Inspector
+          <input id="inspectorInput" type="text" placeholder="Name">
+        </label>
+        <label class="meta-field">Date
+          <input id="dateInput" type="date">
+        </label>
+      </div>
+    </div>
+
+    <ol id="itemList" class="item-list"></ol>
+
+    <div class="add-row">
+      <input id="newItemLabel" type="text" placeholder="New item label" maxlength="140">
+      <div class="type-select" role="group" aria-label="Response type for new item">
+        <button type="button" class="type-btn active" data-type="checkbox">Check</button>
+        <button type="button" class="type-btn" data-type="text">Text</button>
+        <button type="button" class="type-btn" data-type="photo">Photo</button>
+        <button type="button" class="type-btn" data-type="signoff">Sign-off</button>
+        <button type="button" class="type-btn" data-type="section">Section</button>
+      </div>
+      <button id="addItemBtn" class="btn-add" type="button">Add item</button>
+    </div>
+
+    <div class="actions-row">
+      <button id="exportPdfBtn" class="btn-primary" type="button">Export PDF</button>
+      <button id="resetBtn" class="btn-ghost" type="button">Clear responses</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
