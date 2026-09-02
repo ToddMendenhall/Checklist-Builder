@@ -7,7 +7,7 @@ A multi-checklist inspection app — tabs of checklists, five item types (checkb
 - **UI**: plain HTML/CSS/JS (no framework) — ported from the original Checklist Collection artifact
 - **Bundler**: Vite, output to `www/` (Capacitor's `webDir`)
 - **PDF export**: [jsPDF](https://github.com/parallax/jsPDF)
-- **Native bridge**: Capacitor — `@capacitor/preferences` (state persistence), `@capacitor/filesystem` + `@capacitor/share` (save/share the exported PDF on device)
+- **Native bridge**: Capacitor — `@capacitor/preferences` (state persistence), `@capacitor/filesystem` + `@capacitor/share` (save/share the exported PDF on iOS/Android); Tauri — `@tauri-apps/plugin-dialog` + `@tauri-apps/plugin-fs` (native "Save As" dialog for the exported PDF on desktop)
 
 ## Develop in the browser
 
@@ -43,7 +43,7 @@ npm run desktop:build   # produce release binaries/installers for the current OS
 
 `desktop:build` output lands in `src-tauri/target/release/bundle/` — a `.deb`/`.rpm`/`.AppImage` on Linux, `.dmg`/`.app` on macOS, `.msi`/`.exe` on Windows, each built by running the command on that OS (Tauri cross-compiles poorly; build on/for each target platform, e.g. in CI with a matrix build). First-time setup needs the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) installed (Rust toolchain, plus WebView2 on Windows, Xcode command line tools on macOS, or `libwebkit2gtk-4.1-dev` + `libgtk-3-dev` on Linux).
 
-The desktop build runs the same `src/main.js` as the web/mobile builds unmodified: Tauri isn't a platform Capacitor's plugins know about, so `Capacitor.isNativePlatform()` is `false` inside it and the app transparently uses the same `localStorage`-backed `Preferences` and browser-download PDF export it uses on the web. A follow-up could wire the Tauri `fs`/`dialog` plugins for a native "Save As" dialog instead of relying on the browser download.
+`src/main.js` detects Tauri via `isTauri()` from `@tauri-apps/api/core`. State persistence still runs through Capacitor's `Preferences` (its web implementation is just `localStorage`, which works fine in Tauri's webview too — no Tauri-specific storage needed). PDF export is Tauri-specific: clicking "Export PDF" opens the OS's native Save dialog (`@tauri-apps/plugin-dialog`'s `save()`) and writes the PDF straight to the chosen path (`@tauri-apps/plugin-fs`'s `writeFile()`), instead of the browser-download fallback used on the web and the share-sheet flow used on iOS/Android.
 
 ## State & data
 
@@ -54,4 +54,3 @@ Checklist data is stored locally on-device via Capacitor Preferences (falls back
 - Google Fonts are loaded from a CDN; the type stacks fall back to system fonts if offline, but self-hosting the fonts would make the UI fully offline-consistent.
 - Photo capture currently uses a plain `<input type="file" capture>`; swapping in `@capacitor/camera` would give a more native camera UX on mobile.
 - The desktop app icon set (`src-tauri/icons/`) is Tauri's default placeholder — swap in real app icons before shipping.
-- PDF export on desktop uses a browser-style download rather than a native "Save As" dialog (see the Desktop section above).

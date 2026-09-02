@@ -2,6 +2,9 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { isTauri } from '@tauri-apps/api/core';
+import { save as saveFileDialog } from '@tauri-apps/plugin-dialog';
+import { writeFile as writeTauriFile } from '@tauri-apps/plugin-fs';
 import { jsPDF } from 'jspdf';
 
 var STORAGE_KEY = 'checklist-collection-state-v1';
@@ -740,7 +743,15 @@ function browserDownload(blob, filename) {
 }
 
 async function savePdf(blob, filename) {
-  if (Capacitor.isNativePlatform()) {
+  if (isTauri()) {
+    var path = await saveFileDialog({
+      defaultPath: filename,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    });
+    if (!path) return; // user cancelled the dialog
+    var bytes = new Uint8Array(await blob.arrayBuffer());
+    await writeTauriFile(path, bytes);
+  } else if (Capacitor.isNativePlatform()) {
     var base64 = await blobToBase64(blob);
     var written = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache });
     await Share.share({ title: filename, url: written.uri });
