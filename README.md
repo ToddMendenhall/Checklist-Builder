@@ -55,10 +55,20 @@ A **template** is a checklist's structure (title + item labels/types) with no fi
 
 - **Save as template** — snapshots the current checklist's structure (stripping any responses) into your saved template list.
 - **Template library** — a modal listing every saved template as a card (title, description, item count) with actions per template: **New checklist** (opens a brand-new, blank checklist from it — the template itself is untouched, so it can be reused indefinitely), **Export…**, **Rename**, **Add/Edit description**, and **Delete** (click-twice-to-confirm, same pattern as removing a checklist tab).
-- **Export…** — saves the template as a small `.json` file (native Save dialog on desktop, share sheet on iOS/Android, browser download on the web) that can be emailed, AirDropped, or otherwise handed to someone else.
-- **Import template…** — opens a file picker (the same native file-open dialog on every platform, including inside the Tauri desktop window) to add someone else's exported `.json` template to your own saved template list.
+- **Export…** — saves one template as a small `.json` file (native Save dialog on desktop, share sheet on iOS/Android, browser download on the web) that can be emailed, AirDropped, or otherwise handed to someone else.
+- **Export all templates…** — the same idea, bundled: every saved template in one `.json` file (a "pack"), for handing someone your whole set of checklists at once — the more common case in practice.
+- **Import template…** — opens a file picker (the same native file-open dialog on every platform, including inside the Tauri desktop window) and adds the imported template(s) to your saved list. It auto-detects whether the file holds one template or a pack of several, so there's a single Import control either way.
 
-There's no server or account involved — sharing a template just means sharing the file. The template file format is a small versioned JSON wrapper (`{ type, version, template }`); importing validates that shape and rejects anything else with a plain-language error instead of crashing.
+There's no server or account involved — sharing a template just means sharing the file. Each format is a small versioned JSON wrapper (`{ type, version, template }` for one, `{ type, version, templates }` for a pack); importing validates the shape and rejects anything else with a plain-language error instead of crashing.
+
+## Sharing a whole collection (with responses)
+
+Templates only ever carry structure. If instead you want to hand someone (or move to another one of your own devices) *everything currently open* — every checklist tab, exactly as filled in: checked boxes, typed answers, attached photos, signatures — use **Export collection…** / **Import collection…**, at the top of the app under the collection title/description.
+
+- **Export collection…** saves the whole collection — `collectionTitle`, `collectionDescription`, and every checklist with its items and their current responses — to one `.json` file, through the same native Save dialog / share sheet / browser download used everywhere else.
+- **Import collection…** reads a collection file and **replaces everything currently open** — this is a destructive action (there's no undo), so it always confirms first, naming the collection it's about to load in place of your current one.
+
+Because this format includes responses, an exported collection file can contain photos, signatures, and whatever else was typed into it — worth keeping that in mind before emailing one around.
 
 ## Photo capture
 

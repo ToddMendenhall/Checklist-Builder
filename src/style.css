@@ -110,6 +110,14 @@
   .collection-desc-input:focus { outline: none; border-bottom-color: var(--primary); color: var(--ink); }
   .collection-desc-input::placeholder { color: var(--ink-soft); opacity: 0.75; }
 
+  .collection-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    margin-top: 12px;
+  }
+
   /* tab bar */
   .tab-bar {
     display: flex;
@@ -564,6 +572,12 @@
     padding: 2px 6px;
   }
   .modal-close:hover { color: var(--accent); }
+
+  .modal-panel-toolbar {
+    padding: 12px 24px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
 
   .template-library-list { max-height: 70vh; overflow-y: auto; }
   .template-library-empty { padding: 24px; color: var(--ink-soft); font-size: 0.9rem; }

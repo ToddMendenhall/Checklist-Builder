@@ -130,47 +130,135 @@ function checklistFromTemplate(template) {
   });
 }
 
-// File format for sharing a single template with someone else, e.g. by email or
-// AirDrop: a small JSON file they can import into their own copy of the app.
+// File formats for sharing with someone else, e.g. by email or AirDrop: small JSON
+// files they can import into their own copy of the app. Three shapes:
+//  - a single template (structure only, no responses)
+//  - a "pack" of several templates at once — the common case, e.g. handing someone
+//    your whole set of inspection checklists in one file
+//  - a full collection: everything currently open, responses (and photos/
+//    signatures) included, so someone can pick up exactly where you left off
 var TEMPLATE_FILE_TYPE = 'checklist-collection-template';
-var TEMPLATE_FILE_VERSION = 1;
+var TEMPLATE_PACK_FILE_TYPE = 'checklist-collection-template-pack';
+var COLLECTION_FILE_TYPE = 'checklist-collection-full';
+var FILE_FORMAT_VERSION = 1;
+
+function slugifyFilename(name, fallback) {
+  var slug = (name || '').trim().replace(/[^\w\- ]+/g, '').replace(/\s+/g, '_');
+  return slug || fallback;
+}
+
+function templateToPlainObject(template) {
+  return {
+    title: template.title,
+    description: template.description || '',
+    items: template.items.map(templateItemFromItem)
+  };
+}
 
 function templateToFileText(template) {
   return JSON.stringify({
     type: TEMPLATE_FILE_TYPE,
-    version: TEMPLATE_FILE_VERSION,
-    template: {
-      title: template.title,
-      description: template.description || '',
-      items: template.items.map(templateItemFromItem)
-    }
+    version: FILE_FORMAT_VERSION,
+    template: templateToPlainObject(template)
+  }, null, 2);
+}
+
+function templatePackToFileText(templateList) {
+  return JSON.stringify({
+    type: TEMPLATE_PACK_FILE_TYPE,
+    version: FILE_FORMAT_VERSION,
+    templates: templateList.map(templateToPlainObject)
   }, null, 2);
 }
 
 function templateFilename(template) {
-  var slug = (template.title || 'checklist_template').trim().replace(/[^\w\- ]+/g, '').replace(/\s+/g, '_');
-  return (slug || 'checklist_template') + '.json';
+  return slugifyFilename(template.title, 'checklist_template') + '.json';
 }
 
-// Throws a descriptive Error if the text isn't a template file this app can read.
-function templateFromFileText(text) {
+function templatePackFilename() {
+  return slugifyFilename(state.collectionTitle, 'checklist_templates') + '_templates.json';
+}
+
+function templateFromRaw(raw) {
+  return {
+    id: uid(),
+    title: (raw && raw.title && String(raw.title)) || 'Untitled Template',
+    description: (raw && raw.description && String(raw.description)) || '',
+    items: (raw && Array.isArray(raw.items) ? raw.items : [])
+      .filter(function (item) { return item && typeof item.label === 'string' && typeof item.type === 'string'; })
+      .map(function (item) { return { id: uid(), label: item.label, type: item.type }; })
+  };
+}
+
+// Throws a descriptive Error if the text isn't a template (or template pack) file
+// this app can read. Always returns an array — one entry for a single-template file.
+function templatesFromFileText(text) {
   var parsed;
   try {
     parsed = JSON.parse(text);
   } catch (e) {
     throw new Error('That file is not valid JSON.');
   }
-  if (!parsed || parsed.type !== TEMPLATE_FILE_TYPE || !parsed.template || !Array.isArray(parsed.template.items)) {
-    throw new Error('That file is not a checklist template.');
+  if (parsed && parsed.type === TEMPLATE_FILE_TYPE && parsed.template) {
+    return [templateFromRaw(parsed.template)];
   }
-  var raw = parsed.template;
+  if (parsed && parsed.type === TEMPLATE_PACK_FILE_TYPE && Array.isArray(parsed.templates)) {
+    return parsed.templates.map(templateFromRaw);
+  }
+  throw new Error('That file is not a checklist template.');
+}
+
+function collectionToFileText() {
+  return JSON.stringify({
+    type: COLLECTION_FILE_TYPE,
+    version: FILE_FORMAT_VERSION,
+    collection: {
+      collectionTitle: state.collectionTitle,
+      collectionDescription: state.collectionDescription,
+      checklists: state.checklists.map(function (c) {
+        return { title: c.title, inspector: c.inspector, date: c.date, items: c.items };
+      })
+    }
+  }, null, 2);
+}
+
+function collectionFilename() {
+  return slugifyFilename(state.collectionTitle, 'checklist_collection') + '.json';
+}
+
+function checklistFromRaw(raw) {
   return {
     id: uid(),
-    title: (raw.title && String(raw.title)) || 'Untitled Template',
-    description: (raw.description && String(raw.description)) || '',
-    items: raw.items
+    title: (raw && raw.title && String(raw.title)) || 'Untitled Checklist',
+    inspector: (raw && raw.inspector && String(raw.inspector)) || '',
+    date: (raw && raw.date && String(raw.date)) || '',
+    items: (raw && Array.isArray(raw.items) ? raw.items : [])
       .filter(function (item) { return item && typeof item.label === 'string' && typeof item.type === 'string'; })
-      .map(function (item) { return { id: uid(), label: item.label, type: item.type }; })
+      .map(function (item) { return Object.assign({}, item, { id: uid() }); })
+  };
+}
+
+// Throws a descriptive Error if the text isn't a full-collection file this app can read.
+function collectionFromFileText(text) {
+  var parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    throw new Error('That file is not valid JSON.');
+  }
+  if (!parsed || parsed.type !== COLLECTION_FILE_TYPE || !parsed.collection || !Array.isArray(parsed.collection.checklists)) {
+    throw new Error('That file is not a checklist collection.');
+  }
+  var raw = parsed.collection;
+  var checklists = raw.checklists.map(checklistFromRaw);
+  if (checklists.length === 0) {
+    throw new Error('That collection file has no checklists in it.');
+  }
+  return {
+    collectionTitle: (raw.collectionTitle && String(raw.collectionTitle)) || 'Untitled Collection',
+    collectionDescription: (raw.collectionDescription && String(raw.collectionDescription)) || '',
+    checklists: checklists,
+    activeId: checklists[0].id
   };
 }
 
@@ -939,13 +1027,11 @@ async function savePdf(blob, filename) {
   }
 }
 
-async function exportTemplateFile(template) {
-  var filename = templateFilename(template);
-  var text = templateToFileText(template);
+async function saveJsonFile(filename, text, dialogFilterName) {
   if (isTauri()) {
     var path = await saveFileDialog({
       defaultPath: filename,
-      filters: [{ name: 'Checklist Template', extensions: ['json'] }]
+      filters: [{ name: dialogFilterName, extensions: ['json'] }]
     });
     if (!path) return; // user cancelled the dialog
     await writeTauriFile(path, new TextEncoder().encode(text));
@@ -957,6 +1043,18 @@ async function exportTemplateFile(template) {
   } else {
     browserDownload(new Blob([text], { type: 'application/json' }), filename);
   }
+}
+
+async function exportTemplateFile(template) {
+  await saveJsonFile(templateFilename(template), templateToFileText(template), 'Checklist Template');
+}
+
+async function exportTemplatePackFile(templateList) {
+  await saveJsonFile(templatePackFilename(), templatePackToFileText(templateList), 'Checklist Template Pack');
+}
+
+async function exportCollectionFile() {
+  await saveJsonFile(collectionFilename(), collectionToFileText(), 'Checklist Collection');
 }
 
 var exportBtn = document.getElementById('exportPdfBtn');
@@ -1002,16 +1100,70 @@ importTemplateInput.addEventListener('change', function () {
   if (!file) return;
   var reader = new FileReader();
   reader.onload = function () {
-    var template;
+    var imported;
     try {
-      template = templateFromFileText(String(reader.result));
+      imported = templatesFromFileText(String(reader.result)); // one file, one or many templates
     } catch (e) {
       alert(e && e.message ? e.message : 'Could not import that file.');
       return;
     }
-    templates.push(template);
+    templates = templates.concat(imported);
     saveTemplates();
     if (!templateLibraryOverlay.hidden) renderTemplateLibrary();
+    if (imported.length > 1) alert('Imported ' + imported.length + ' templates.');
+  };
+  reader.onerror = function () { alert('Could not read that file.'); };
+  reader.readAsText(file);
+});
+
+var exportAllTemplatesBtn = document.getElementById('exportAllTemplatesBtn');
+exportAllTemplatesBtn.addEventListener('click', async function () {
+  if (templates.length === 0) { alert('No saved templates to export yet.'); return; }
+  exportAllTemplatesBtn.disabled = true;
+  try {
+    await exportTemplatePackFile(templates);
+  } catch (e) {
+    alert('Could not export templates: ' + (e && e.message ? e.message : e));
+  } finally {
+    exportAllTemplatesBtn.disabled = false;
+  }
+});
+
+var exportCollectionBtn = document.getElementById('exportCollectionBtn');
+var importCollectionInput = document.getElementById('importCollectionInput');
+
+exportCollectionBtn.addEventListener('click', async function () {
+  exportCollectionBtn.disabled = true;
+  try {
+    await exportCollectionFile();
+  } catch (e) {
+    alert('Could not export the collection: ' + (e && e.message ? e.message : e));
+  } finally {
+    exportCollectionBtn.disabled = false;
+  }
+});
+
+importCollectionInput.addEventListener('change', function () {
+  var file = importCollectionInput.files && importCollectionInput.files[0];
+  importCollectionInput.value = '';
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    var imported;
+    try {
+      imported = collectionFromFileText(String(reader.result));
+    } catch (e) {
+      alert(e && e.message ? e.message : 'Could not import that file.');
+      return;
+    }
+    var proceed = window.confirm(
+      'Importing "' + imported.collectionTitle + '" will replace everything currently open ' +
+      '(all checklist tabs and their responses). This cannot be undone. Continue?'
+    );
+    if (!proceed) return;
+    state = imported;
+    saveState();
+    render();
   };
   reader.onerror = function () { alert('Could not read that file.'); };
   reader.readAsText(file);

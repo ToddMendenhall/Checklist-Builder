@@ -20,6 +20,12 @@
       </div>
       <input id="collectionTitleInput" class="collection-title-input" value="Site Inspection Collection" aria-label="Collection title">
       <textarea id="collectionDescInput" class="collection-desc-input" rows="2" placeholder="Describe this collection of checklists…"></textarea>
+      <div class="collection-actions-row">
+        <button id="exportCollectionBtn" class="btn-ghost" type="button">Export collection…</button>
+        <label class="btn-ghost import-template-label">Import collection…
+          <input id="importCollectionInput" type="file" accept="application/json,.json" hidden>
+        </label>
+      </div>
     </header>
 
     <div class="tab-bar" id="tabBar" role="tablist" aria-label="Checklists"></div>
@@ -71,6 +77,9 @@
       <div class="modal-panel-header">
         <h2 id="templateLibraryTitle">Template Library</h2>
         <button id="closeTemplateLibraryBtn" class="modal-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="modal-panel-toolbar">
+        <button id="exportAllTemplatesBtn" class="btn-ghost" type="button">Export all templates…</button>
       </div>
       <div id="templateLibraryList" class="template-library-list"></div>
     </div>
