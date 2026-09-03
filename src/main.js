@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { isTauri } from '@tauri-apps/api/core';
 import { save as saveFileDialog } from '@tauri-apps/plugin-dialog';
@@ -127,6 +127,50 @@ function checklistFromTemplate(template) {
       );
     })
   });
+}
+
+// File format for sharing a single template with someone else, e.g. by email or
+// AirDrop: a small JSON file they can import into their own copy of the app.
+var TEMPLATE_FILE_TYPE = 'checklist-collection-template';
+var TEMPLATE_FILE_VERSION = 1;
+
+function templateToFileText(template) {
+  return JSON.stringify({
+    type: TEMPLATE_FILE_TYPE,
+    version: TEMPLATE_FILE_VERSION,
+    template: {
+      title: template.title,
+      description: template.description || '',
+      items: template.items.map(templateItemFromItem)
+    }
+  }, null, 2);
+}
+
+function templateFilename(template) {
+  var slug = (template.title || 'checklist_template').trim().replace(/[^\w\- ]+/g, '').replace(/\s+/g, '_');
+  return (slug || 'checklist_template') + '.json';
+}
+
+// Throws a descriptive Error if the text isn't a template file this app can read.
+function templateFromFileText(text) {
+  var parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    throw new Error('That file is not valid JSON.');
+  }
+  if (!parsed || parsed.type !== TEMPLATE_FILE_TYPE || !parsed.template || !Array.isArray(parsed.template.items)) {
+    throw new Error('That file is not a checklist template.');
+  }
+  var raw = parsed.template;
+  return {
+    id: uid(),
+    title: (raw.title && String(raw.title)) || 'Untitled Template',
+    description: (raw.description && String(raw.description)) || '',
+    items: raw.items
+      .filter(function (item) { return item && typeof item.label === 'string' && typeof item.type === 'string'; })
+      .map(function (item) { return { id: uid(), label: item.label, type: item.type }; })
+  };
 }
 
 var itemListEl = document.getElementById('itemList');
@@ -819,7 +863,7 @@ function browserDownload(blob, filename) {
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-  } catch (e) { alert('Could not save the PDF in this view.'); }
+  } catch (e) { alert('Could not save the file in this view.'); }
 }
 
 async function savePdf(blob, filename) {
@@ -837,6 +881,26 @@ async function savePdf(blob, filename) {
     await Share.share({ title: filename, url: written.uri });
   } else {
     browserDownload(blob, filename);
+  }
+}
+
+async function exportTemplateFile(template) {
+  var filename = templateFilename(template);
+  var text = templateToFileText(template);
+  if (isTauri()) {
+    var path = await saveFileDialog({
+      defaultPath: filename,
+      filters: [{ name: 'Checklist Template', extensions: ['json'] }]
+    });
+    if (!path) return; // user cancelled the dialog
+    await writeTauriFile(path, new TextEncoder().encode(text));
+  } else if (Capacitor.isNativePlatform()) {
+    var written = await Filesystem.writeFile({
+      path: filename, data: text, directory: Directory.Cache, encoding: Encoding.UTF8
+    });
+    await Share.share({ title: filename, url: written.uri });
+  } else {
+    browserDownload(new Blob([text], { type: 'application/json' }), filename);
   }
 }
 
@@ -861,6 +925,8 @@ exportBtn.addEventListener('click', async function () {
 var templateSelectEl = document.getElementById('templateSelect');
 var loadTemplateBtn = document.getElementById('loadTemplateBtn');
 var saveTemplateBtn = document.getElementById('saveTemplateBtn');
+var exportTemplateBtn = document.getElementById('exportTemplateBtn');
+var importTemplateInput = document.getElementById('importTemplateInput');
 
 function renderTemplateOptions() {
   var options = ['<option value="">Saved templates…</option>'].concat(
@@ -893,6 +959,43 @@ loadTemplateBtn.addEventListener('click', function () {
   state.checklists.push(checklist);
   state.activeId = checklist.id;
   saveState(); render();
+});
+
+exportTemplateBtn.addEventListener('click', async function () {
+  var id = templateSelectEl.value;
+  if (!id) { alert('Pick a saved template first.'); return; }
+  var template = templates.find(function (t) { return t.id === id; });
+  if (!template) return;
+  exportTemplateBtn.disabled = true;
+  try {
+    await exportTemplateFile(template);
+  } catch (e) {
+    alert('Could not export the template: ' + (e && e.message ? e.message : e));
+  } finally {
+    exportTemplateBtn.disabled = false;
+  }
+});
+
+importTemplateInput.addEventListener('change', function () {
+  var file = importTemplateInput.files && importTemplateInput.files[0];
+  importTemplateInput.value = '';
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    var template;
+    try {
+      template = templateFromFileText(String(reader.result));
+    } catch (e) {
+      alert(e && e.message ? e.message : 'Could not import that file.');
+      return;
+    }
+    templates.push(template);
+    saveTemplates();
+    renderTemplateOptions();
+    templateSelectEl.value = template.id;
+  };
+  reader.onerror = function () { alert('Could not read that file.'); };
+  reader.readAsText(file);
 });
 
 async function init() {

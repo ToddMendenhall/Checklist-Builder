@@ -470,6 +470,7 @@
     padding: 14px 24px;
     border-bottom: 1px solid var(--line);
   }
+  .import-template-label { display: inline-flex; align-items: center; }
   .template-row select {
     font-family: 'Source Sans 3', sans-serif;
     font-size: 0.85rem;

@@ -49,6 +49,19 @@ npm run desktop:build   # produce release binaries/installers for the current OS
 
 Checklist data is stored locally on-device via Capacitor Preferences (falls back to `localStorage` in a plain browser). There is no server/sync component — each device's data is independent.
 
+## Templates — reusable, shareable checklists
+
+A **template** is a checklist's structure (title + item labels/types) with no filled-in responses — separate from the checklists in your tabs, which are always filled-in instances. This is what makes a blank checklist reusable:
+
+- **Save as template** — snapshots the current checklist's structure (stripping any responses) into your saved template list.
+- **New checklist from template** — picks a saved template and opens a brand-new, blank checklist from it; the template itself is untouched, so it can be reused indefinitely.
+- **Export template…** — saves the selected template as a small `.json` file (native Save dialog on desktop, share sheet on iOS/Android, browser download on the web) that can be emailed, AirDropped, or otherwise handed to someone else.
+- **Import template…** — opens a file picker (the same native file-open dialog on every platform, including inside the Tauri desktop window) to add someone else's exported `.json` template to your own saved template list.
+
+There's no server or account involved — sharing a template just means sharing the file. The template file format is a small versioned JSON wrapper (`{ type, version, template }`); importing validates that shape and rejects anything else with a plain-language error instead of crashing.
+
+Not yet built: a proper template library view (rename/delete saved templates — today it's just a dropdown), and template descriptions aren't surfaced in the UI even though the data model has a field for one.
+
 ## Known follow-ups
 
 - Google Fonts are loaded from a CDN; the type stacks fall back to system fonts if offline, but self-hosting the fonts would make the UI fully offline-consistent.
