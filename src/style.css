@@ -469,6 +469,8 @@
     gap: 10px;
     align-items: center;
     padding: 14px 24px;
+    background: var(--bg);
+    border-top: 1px solid var(--line-strong);
     border-bottom: 1px solid var(--line);
   }
   .import-template-label { display: inline-flex; align-items: center; }
@@ -480,6 +482,8 @@
     padding: 18px 24px 22px;
     gap: 12px;
     flex-wrap: wrap;
+    background: var(--bg);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   }
   .btn-primary {
     font-family: 'Source Sans 3', sans-serif;
