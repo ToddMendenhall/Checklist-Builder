@@ -8,9 +8,22 @@ import { writeFile as writeTauriFile } from '@tauri-apps/plugin-fs';
 import { jsPDF } from 'jspdf';
 
 var STORAGE_KEY = 'checklist-collection-state-v1';
+var TEMPLATES_KEY = 'checklist-collection-templates-v1';
 var THEME_KEY = 'checklist-collection-theme';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
+
+// Response fields a filled-in checklist item carries that a template item does not.
+function defaultResponseFields(type) {
+  if (type === 'checkbox') return { checked: false };
+  if (type === 'text') return { text: '' };
+  if (type === 'photo') return { photo: null };
+  if (type === 'signoff') {
+    var supportsTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    return { mode: supportsTouch ? 'draw' : 'type', signature: null, name: '', date: '' };
+  }
+  return {};
+}
 
 function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, function (c) {
@@ -68,6 +81,52 @@ var state;
 function getActive() {
   var found = state.checklists.find(function (c) { return c.id === state.activeId; });
   return found || state.checklists[0];
+}
+
+// A template holds only checklist structure (title/description/items with their
+// labels and types) — never response values — so it can be reused to start fresh
+// checklists without carrying over anyone's filled-in answers.
+async function loadTemplates() {
+  try {
+    var raw = (await Preferences.get({ key: TEMPLATES_KEY })).value;
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) { /* storage unavailable or corrupt — fall through */ }
+  return [];
+}
+
+function saveTemplates() {
+  Preferences.set({ key: TEMPLATES_KEY, value: JSON.stringify(templates) })
+    .catch(function () { /* storage full or unavailable; edits stay in-memory only */ });
+}
+
+var templates;
+
+function templateItemFromItem(item) {
+  return { id: uid(), label: item.label, type: item.type };
+}
+
+function createTemplateFromChecklist(checklist, title) {
+  return {
+    id: uid(),
+    title: (title && title.trim()) || checklist.title || 'Untitled Template',
+    description: '',
+    items: checklist.items.map(templateItemFromItem)
+  };
+}
+
+function checklistFromTemplate(template) {
+  return newChecklist({
+    title: template.title,
+    items: template.items.map(function (templateItem) {
+      return Object.assign(
+        { id: uid(), label: templateItem.label, type: templateItem.type },
+        defaultResponseFields(templateItem.type)
+      );
+    })
+  });
 }
 
 var itemListEl = document.getElementById('itemList');
@@ -456,17 +515,7 @@ typeButtons.forEach(function (b) {
 function addItem() {
   var label = newItemLabelEl.value.trim();
   if (!label) { newItemLabelEl.focus(); return; }
-  var item = { id: uid(), label: label, type: selectedType };
-  if (selectedType === 'checkbox') item.checked = false;
-  if (selectedType === 'text') item.text = '';
-  if (selectedType === 'photo') item.photo = null;
-  if (selectedType === 'signoff') {
-    var supportsTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    item.mode = supportsTouch ? 'draw' : 'type';
-    item.signature = null;
-    item.name = '';
-    item.date = '';
-  }
+  var item = Object.assign({ id: uid(), label: label, type: selectedType }, defaultResponseFields(selectedType));
   getActive().items.push(item);
   newItemLabelEl.value = '';
   saveState(); render();
@@ -809,8 +858,47 @@ exportBtn.addEventListener('click', async function () {
   }
 });
 
+var templateSelectEl = document.getElementById('templateSelect');
+var loadTemplateBtn = document.getElementById('loadTemplateBtn');
+var saveTemplateBtn = document.getElementById('saveTemplateBtn');
+
+function renderTemplateOptions() {
+  var options = ['<option value="">Saved templates…</option>'].concat(
+    templates.map(function (t) {
+      return '<option value="' + t.id + '">' + escapeHtml(t.title || 'Untitled Template') + '</option>';
+    })
+  );
+  templateSelectEl.innerHTML = options.join('');
+}
+
+saveTemplateBtn.addEventListener('click', function () {
+  var active = getActive();
+  var name = window.prompt('Save as template — name:', active.title || 'Untitled Template');
+  if (name === null) return; // cancelled
+  name = name.trim();
+  if (!name) return;
+  var template = createTemplateFromChecklist(active, name);
+  templates.push(template);
+  saveTemplates();
+  renderTemplateOptions();
+  templateSelectEl.value = template.id;
+});
+
+loadTemplateBtn.addEventListener('click', function () {
+  var id = templateSelectEl.value;
+  if (!id) return;
+  var template = templates.find(function (t) { return t.id === id; });
+  if (!template) return;
+  var checklist = checklistFromTemplate(template);
+  state.checklists.push(checklist);
+  state.activeId = checklist.id;
+  saveState(); render();
+});
+
 async function init() {
   state = await loadState();
+  templates = await loadTemplates();
+  renderTemplateOptions();
   render();
 }
 

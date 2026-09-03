@@ -462,6 +462,25 @@
   }
   .btn-add:hover { border-color: var(--primary); color: var(--primary); }
 
+  .template-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .template-row select {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.85rem;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    padding: 7px 10px;
+    max-width: 220px;
+  }
+
   .actions-row {
     display: flex;
     justify-content: space-between;
