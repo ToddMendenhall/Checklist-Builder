@@ -552,7 +552,28 @@ function drawPdfCheckbox(doc, rightEdgeX, yBaseline, checked) {
   doc.setDrawColor(0, 0, 0);
 }
 
-function buildPdfBlob() {
+var logoDataPromise = null;
+function loadPdfLogo() {
+  if (!logoDataPromise) {
+    logoDataPromise = new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          resolve({ dataUrl: canvas.toDataURL('image/png'), width: img.naturalWidth, height: img.naturalHeight });
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = function () { resolve(null); };
+      img.src = '/assets/logo-light.png';
+    });
+  }
+  return logoDataPromise;
+}
+
+async function buildPdfBlob() {
   var active = getActive();
   var doc = new jsPDF({ unit: 'pt', format: 'letter' });
   var marginX = 48;
@@ -563,12 +584,20 @@ function buildPdfBlob() {
 
   function ensureSpace(h) { if (y + h > pageHeight - 56) { doc.addPage(); y = 56; } }
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(216, 48, 42);
-  doc.text('CYPRESS IN-LINE INSPECTION', marginX, y);
-  doc.setTextColor(20, 20, 20);
-  y += 16;
+  var logo = await loadPdfLogo();
+  if (logo) {
+    var logoH = 30;
+    var logoW = logoH * (logo.width / logo.height);
+    doc.addImage(logo.dataUrl, 'PNG', marginX, y - 20, logoW, logoH);
+    y += logoH + 4;
+  } else {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(216, 48, 42);
+    doc.text('CYPRESS IN-LINE INSPECTION', marginX, y);
+    doc.setTextColor(20, 20, 20);
+    y += 16;
+  }
 
   if (state.collectionTitle) {
     doc.setFont('helvetica', 'normal');
@@ -580,6 +609,8 @@ function buildPdfBlob() {
   } else {
     y += 4;
   }
+
+  y += 12; // blank line between the collection name and the checklist name
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(19);
@@ -766,7 +797,7 @@ exportBtn.addEventListener('click', async function () {
   var original = exportBtn.textContent;
   exportBtn.textContent = 'Building PDF…';
   try {
-    var blob = buildPdfBlob();
+    var blob = await buildPdfBlob();
     var active = getActive();
     var filename = ((active.title || 'checklist').trim().replace(/[^\w\- ]+/g, '').replace(/\s+/g, '_') || 'checklist') + '.pdf';
     await savePdf(blob, filename);
