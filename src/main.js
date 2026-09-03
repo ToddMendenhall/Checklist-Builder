@@ -922,20 +922,14 @@ exportBtn.addEventListener('click', async function () {
   }
 });
 
-var templateSelectEl = document.getElementById('templateSelect');
-var loadTemplateBtn = document.getElementById('loadTemplateBtn');
 var saveTemplateBtn = document.getElementById('saveTemplateBtn');
-var exportTemplateBtn = document.getElementById('exportTemplateBtn');
 var importTemplateInput = document.getElementById('importTemplateInput');
-
-function renderTemplateOptions() {
-  var options = ['<option value="">Saved templates…</option>'].concat(
-    templates.map(function (t) {
-      return '<option value="' + t.id + '">' + escapeHtml(t.title || 'Untitled Template') + '</option>';
-    })
-  );
-  templateSelectEl.innerHTML = options.join('');
-}
+var openTemplateLibraryBtn = document.getElementById('openTemplateLibraryBtn');
+var closeTemplateLibraryBtn = document.getElementById('closeTemplateLibraryBtn');
+var templateLibraryOverlay = document.getElementById('templateLibraryOverlay');
+var templateLibraryList = document.getElementById('templateLibraryList');
+var templateDeleteArmedId = null;
+var templateDeleteTimer = null;
 
 saveTemplateBtn.addEventListener('click', function () {
   var active = getActive();
@@ -943,37 +937,8 @@ saveTemplateBtn.addEventListener('click', function () {
   if (name === null) return; // cancelled
   name = name.trim();
   if (!name) return;
-  var template = createTemplateFromChecklist(active, name);
-  templates.push(template);
+  templates.push(createTemplateFromChecklist(active, name));
   saveTemplates();
-  renderTemplateOptions();
-  templateSelectEl.value = template.id;
-});
-
-loadTemplateBtn.addEventListener('click', function () {
-  var id = templateSelectEl.value;
-  if (!id) return;
-  var template = templates.find(function (t) { return t.id === id; });
-  if (!template) return;
-  var checklist = checklistFromTemplate(template);
-  state.checklists.push(checklist);
-  state.activeId = checklist.id;
-  saveState(); render();
-});
-
-exportTemplateBtn.addEventListener('click', async function () {
-  var id = templateSelectEl.value;
-  if (!id) { alert('Pick a saved template first.'); return; }
-  var template = templates.find(function (t) { return t.id === id; });
-  if (!template) return;
-  exportTemplateBtn.disabled = true;
-  try {
-    await exportTemplateFile(template);
-  } catch (e) {
-    alert('Could not export the template: ' + (e && e.message ? e.message : e));
-  } finally {
-    exportTemplateBtn.disabled = false;
-  }
 });
 
 importTemplateInput.addEventListener('change', function () {
@@ -991,17 +956,121 @@ importTemplateInput.addEventListener('change', function () {
     }
     templates.push(template);
     saveTemplates();
-    renderTemplateOptions();
-    templateSelectEl.value = template.id;
+    if (!templateLibraryOverlay.hidden) renderTemplateLibrary();
   };
   reader.onerror = function () { alert('Could not read that file.'); };
   reader.readAsText(file);
 });
 
+function templateCardHtml(t) {
+  var count = t.items.length;
+  var deleteArmed = templateDeleteArmedId === t.id;
+  return (
+    '<div class="template-card" data-id="' + t.id + '">' +
+      '<div class="template-card-main">' +
+        '<div class="template-card-title">' + escapeHtml(t.title || 'Untitled Template') + '</div>' +
+        (t.description ? '<div class="template-card-desc">' + escapeHtml(t.description) + '</div>' : '') +
+        '<div class="template-card-meta">' + count + (count === 1 ? ' item' : ' items') + '</div>' +
+      '</div>' +
+      '<div class="template-card-actions">' +
+        '<button type="button" class="btn-add" data-action="new-checklist" data-id="' + t.id + '">New checklist</button>' +
+        '<button type="button" class="btn-ghost" data-action="export" data-id="' + t.id + '">Export…</button>' +
+        '<button type="button" class="btn-ghost" data-action="rename" data-id="' + t.id + '">Rename</button>' +
+        '<button type="button" class="btn-ghost" data-action="edit-description" data-id="' + t.id + '">' +
+          (t.description ? 'Edit description' : 'Add description') +
+        '</button>' +
+        '<button type="button" class="btn-ghost template-delete-btn ' + (deleteArmed ? 'confirm-pending' : '') + '" data-action="delete" data-id="' + t.id + '">' +
+          (deleteArmed ? 'Click again to delete' : 'Delete') +
+        '</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function renderTemplateLibrary() {
+  if (templates.length === 0) {
+    templateLibraryList.innerHTML = '<p class="template-library-empty">No saved templates yet — use "Save as template" on a checklist, or import a template file.</p>';
+    return;
+  }
+  templateLibraryList.innerHTML = templates.map(templateCardHtml).join('');
+}
+
+function openTemplateLibrary() {
+  renderTemplateLibrary();
+  templateLibraryOverlay.hidden = false;
+}
+
+function closeTemplateLibrary() {
+  templateLibraryOverlay.hidden = true;
+  clearTimeout(templateDeleteTimer);
+  templateDeleteArmedId = null;
+}
+
+openTemplateLibraryBtn.addEventListener('click', openTemplateLibrary);
+closeTemplateLibraryBtn.addEventListener('click', closeTemplateLibrary);
+templateLibraryOverlay.addEventListener('click', function (e) {
+  if (e.target === templateLibraryOverlay) closeTemplateLibrary();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && !templateLibraryOverlay.hidden) closeTemplateLibrary();
+});
+
+templateLibraryList.addEventListener('click', async function (e) {
+  var btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  var id = btn.dataset.id;
+  var action = btn.dataset.action;
+  var template = templates.find(function (t) { return t.id === id; });
+  if (!template) return;
+
+  if (action === 'new-checklist') {
+    var checklist = checklistFromTemplate(template);
+    state.checklists.push(checklist);
+    state.activeId = checklist.id;
+    saveState(); render();
+    closeTemplateLibrary();
+  } else if (action === 'export') {
+    btn.disabled = true;
+    try {
+      await exportTemplateFile(template);
+    } catch (err) {
+      alert('Could not export the template: ' + (err && err.message ? err.message : err));
+    } finally {
+      btn.disabled = false;
+    }
+  } else if (action === 'rename') {
+    var name = window.prompt('Rename template:', template.title || 'Untitled Template');
+    if (name === null) return;
+    name = name.trim();
+    if (!name) return;
+    template.title = name;
+    saveTemplates();
+    renderTemplateLibrary();
+  } else if (action === 'edit-description') {
+    var desc = window.prompt('Template description:', template.description || '');
+    if (desc === null) return;
+    template.description = desc.trim();
+    saveTemplates();
+    renderTemplateLibrary();
+  } else if (action === 'delete') {
+    if (templateDeleteArmedId !== id) {
+      templateDeleteArmedId = id;
+      clearTimeout(templateDeleteTimer);
+      templateDeleteTimer = setTimeout(function () { templateDeleteArmedId = null; renderTemplateLibrary(); }, 4000);
+      renderTemplateLibrary();
+      return;
+    }
+    clearTimeout(templateDeleteTimer);
+    templateDeleteArmedId = null;
+    templates = templates.filter(function (t) { return t.id !== id; });
+    saveTemplates();
+    renderTemplateLibrary();
+  }
+});
+
 async function init() {
   state = await loadState();
   templates = await loadTemplates();
-  renderTemplateOptions();
   render();
 }
 

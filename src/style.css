@@ -471,16 +471,6 @@
     border-bottom: 1px solid var(--line);
   }
   .import-template-label { display: inline-flex; align-items: center; }
-  .template-row select {
-    font-family: 'Source Sans 3', sans-serif;
-    font-size: 0.85rem;
-    color: var(--ink);
-    background: var(--panel);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-md);
-    padding: 7px 10px;
-    max-width: 220px;
-  }
 
   .actions-row {
     display: flex;
@@ -523,3 +513,88 @@
   }
 
   .empty-note { padding: 24px; color: var(--ink-soft); font-size: 0.9rem; }
+
+  /* template library modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 24, 28, 0.5);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    z-index: 100;
+    overflow-y: auto;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal-panel {
+    width: 100%;
+    max-width: 640px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+  }
+  .modal-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-panel-header h2 {
+    margin: 0;
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: var(--ink);
+  }
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .modal-close:hover { color: var(--accent); }
+
+  .template-library-list { max-height: 70vh; overflow-y: auto; }
+  .template-library-empty { padding: 24px; color: var(--ink-soft); font-size: 0.9rem; }
+
+  .template-card {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .template-card:last-child { border-bottom: none; }
+  .template-card-title {
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--ink);
+  }
+  .template-card-desc {
+    margin-top: 3px;
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+  .template-card-meta {
+    margin-top: 5px;
+    font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+  }
+  .template-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .template-card-actions .btn-add {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+  }
+  .template-delete-btn:hover { color: var(--accent); }
