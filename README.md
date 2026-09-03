@@ -7,7 +7,7 @@ A multi-checklist inspection app — tabs of checklists, five item types (checkb
 - **UI**: plain HTML/CSS/JS (no framework) — ported from the original Checklist Collection artifact
 - **Bundler**: Vite, output to `www/` (Capacitor's `webDir`)
 - **PDF export**: [jsPDF](https://github.com/parallax/jsPDF)
-- **Native bridge**: Capacitor — `@capacitor/preferences` (state persistence), `@capacitor/filesystem` + `@capacitor/share` (save/share the exported PDF on iOS/Android); Tauri — `@tauri-apps/plugin-dialog` + `@tauri-apps/plugin-fs` (native "Save As" dialog for the exported PDF on desktop)
+- **Native bridge**: Capacitor — `@capacitor/preferences` (state persistence), `@capacitor/filesystem` + `@capacitor/share` (save/share the exported PDF on iOS/Android), `@capacitor/camera` (native camera/photo-library capture on iOS/Android); Tauri — `@tauri-apps/plugin-dialog` + `@tauri-apps/plugin-fs` (native "Save As" dialog for the exported PDF on desktop)
 
 ## Develop in the browser
 
@@ -60,8 +60,11 @@ A **template** is a checklist's structure (title + item labels/types) with no fi
 
 There's no server or account involved — sharing a template just means sharing the file. The template file format is a small versioned JSON wrapper (`{ type, version, template }`); importing validates that shape and rejects anything else with a plain-language error instead of crashing.
 
+## Photo capture
+
+Tapping "Add photo" on a photo-type item behaves differently by platform: on iOS/Android it calls `@capacitor/camera`'s `Camera.getPhoto()` with `source: CameraSource.Prompt`, which shows the native "Take Photo / Choose from Library" action sheet — the plugin also handles downscaling (`width: 1600`) and EXIF orientation correction itself. On the web and desktop (Tauri included, since it isn't a platform the Capacitor plugin knows about) it falls back to a plain file input, with the same resizing/JPEG re-encoding done manually in `resizePhotoFile()`. Either path lands on the same `item.photo = { dataUrl, width, height }` shape, so the rest of the app (thumbnail display, PDF embedding) doesn't need to know which path was used. Cancelling the native picker is treated as a no-op, not an error.
+
 ## Known follow-ups
 
 - Google Fonts are loaded from a CDN; the type stacks fall back to system fonts if offline, but self-hosting the fonts would make the UI fully offline-consistent.
-- Photo capture currently uses a plain `<input type="file" capture>`; swapping in `@capacitor/camera` would give a more native camera UX on mobile.
 - The desktop app icon set (`src-tauri/icons/`) is Tauri's default placeholder — swap in real app icons before shipping.

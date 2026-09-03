@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { isTauri } from '@tauri-apps/api/core';
 import { save as saveFileDialog } from '@tauri-apps/plugin-dialog';
 import { writeFile as writeTauriFile } from '@tauri-apps/plugin-fs';
@@ -219,10 +220,7 @@ function itemTemplate(item, num) {
         '</div>';
     } else {
       responseHtml =
-        '<label class="photo-btn">' +
-        '<input type="file" accept="image/*" capture="environment" data-action="photo" data-id="' + item.id + '" hidden>' +
-        '<span>Add photo</span>' +
-        '</label>';
+        '<button type="button" class="photo-btn" data-action="photo" data-id="' + item.id + '">Add photo</button>';
     }
   } else if (item.type === 'signoff') {
     var isDraw = item.mode !== 'type';
@@ -404,6 +402,8 @@ itemListEl.addEventListener('click', function (e) {
   } else if (action === 'clear-signature' && item) {
     item.signature = null;
     saveState(); render();
+  } else if (action === 'photo' && item) {
+    addPhotoToItem(item);
   }
 });
 
@@ -417,43 +417,98 @@ itemListEl.addEventListener('input', function (e) {
   else if (action === 'signoff-date') { item.date = e.target.value; saveState(); }
 });
 
-itemListEl.addEventListener('change', function (e) {
-  if (e.target.dataset.action !== 'photo') return;
-  var file = e.target.files && e.target.files[0];
-  if (!file) return;
-  var id = e.target.dataset.id;
-  var reader = new FileReader();
-  reader.onload = function () {
+var photoFileInput = document.getElementById('photoFileInput');
+var pendingPhotoItemId = null;
+
+function addPhotoToItem(item) {
+  if (Capacitor.isNativePlatform()) {
+    capturePhotoNative(item.id).catch(function (e) {
+      var msg = e && e.message ? e.message : String(e);
+      if (/cancel/i.test(msg)) return; // user backed out of the camera/library picker
+      alert('Could not capture photo: ' + msg);
+    });
+  } else {
+    pendingPhotoItemId = item.id;
+    photoFileInput.click();
+  }
+}
+
+// The native Camera plugin already downsizes via `width`; we still need the
+// actual pixel dimensions for the PDF layout, so load the result once to read them.
+function loadImageDimensions(dataUrl) {
+  return new Promise(function (resolve, reject) {
     var img = new Image();
-    img.onload = function () {
-      var active = getActive();
-      var item = active.items.find(function (i) { return i.id === id; });
-      if (!item) return;
-      var MAX_DIM = 1600;
-      var srcW = img.naturalWidth, srcH = img.naturalHeight;
-      var scale = Math.min(1, MAX_DIM / Math.max(srcW, srcH));
-      var outW = Math.max(1, Math.round(srcW * scale));
-      var outH = Math.max(1, Math.round(srcH * scale));
-      var dataUrl = reader.result;
-      try {
-        var canvas = document.createElement('canvas');
-        canvas.width = outW; canvas.height = outH;
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, outW, outH);
-        ctx.drawImage(img, 0, 0, outW, outH);
-        dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-      } catch (err) {
-        outW = srcW; outH = srcH;
-      }
-      item.photo = { dataUrl: dataUrl, width: outW, height: outH };
-      saveState(); render();
+    img.onload = function () { resolve({ width: img.naturalWidth, height: img.naturalHeight }); };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+async function capturePhotoNative(id) {
+  var photo = await Camera.getPhoto({
+    resultType: CameraResultType.DataUrl,
+    source: CameraSource.Prompt,
+    quality: 82,
+    width: 1600,
+    correctOrientation: true
+  });
+  var dims = await loadImageDimensions(photo.dataUrl);
+  var active = getActive();
+  var item = active.items.find(function (i) { return i.id === id; });
+  if (!item) return;
+  item.photo = { dataUrl: photo.dataUrl, width: dims.width, height: dims.height };
+  saveState(); render();
+}
+
+function resizePhotoFile(file) {
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var MAX_DIM = 1600;
+        var srcW = img.naturalWidth, srcH = img.naturalHeight;
+        var scale = Math.min(1, MAX_DIM / Math.max(srcW, srcH));
+        var outW = Math.max(1, Math.round(srcW * scale));
+        var outH = Math.max(1, Math.round(srcH * scale));
+        var dataUrl = reader.result;
+        try {
+          var canvas = document.createElement('canvas');
+          canvas.width = outW; canvas.height = outH;
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, outW, outH);
+          ctx.drawImage(img, 0, 0, outW, outH);
+          dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        } catch (err) {
+          outW = srcW; outH = srcH;
+        }
+        resolve({ dataUrl: dataUrl, width: outW, height: outH });
+      };
+      img.onerror = function () { reject(new Error('Could not read that photo. Try a different file.')); };
+      img.src = reader.result;
     };
-    img.onerror = function () { alert('Could not read that photo. Try a different file.'); };
-    img.src = reader.result;
-  };
-  reader.onerror = function () { alert('Could not read that photo. Try a different file.'); };
-  reader.readAsDataURL(file);
+    reader.onerror = function () { reject(new Error('Could not read that photo. Try a different file.')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+photoFileInput.addEventListener('change', async function () {
+  var file = photoFileInput.files && photoFileInput.files[0];
+  var id = pendingPhotoItemId;
+  photoFileInput.value = '';
+  pendingPhotoItemId = null;
+  if (!file || !id) return;
+  try {
+    var photo = await resizePhotoFile(file);
+    var active = getActive();
+    var item = active.items.find(function (i) { return i.id === id; });
+    if (!item) return;
+    item.photo = photo;
+    saveState(); render();
+  } catch (e) {
+    alert(e && e.message ? e.message : 'Could not read that photo.');
+  }
 });
 
 function moveItem(fromIndex, toIndex) {

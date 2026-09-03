@@ -338,6 +338,7 @@
     font-family: 'Source Sans 3', sans-serif;
     font-size: 0.85rem;
     color: var(--ink-soft);
+    background: transparent;
     border: 1px dashed var(--line-strong);
     border-radius: var(--radius-sm);
     padding: 7px 12px;
