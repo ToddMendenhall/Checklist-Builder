@@ -14,6 +14,19 @@ var THEME_KEY = 'checklist-collection-theme';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
+// "Cypress Blue" scale (100-900, sampled from the droplet mark) used to give each
+// checklist tab its own accent color, via 9 CSS custom properties (--tab-color-0..8,
+// defined in style.css) rather than raw hex — some steps are illegible against one
+// theme's background, so the CSS substitutes a mirrored step for those slots per
+// theme while this hash-to-slot assignment itself stays theme-agnostic. Assigned per
+// checklist id (stable regardless of tab order or how many other checklists are open).
+var TAB_COLOR_SLOT_COUNT = 9;
+function tabColorVarForId(id) {
+  var hash = 0;
+  for (var i = 0; i < id.length; i++) { hash = (hash * 31 + id.charCodeAt(i)) >>> 0; }
+  return 'var(--tab-color-' + (hash % TAB_COLOR_SLOT_COUNT) + ')';
+}
+
 // Response fields a filled-in checklist item carries that a template item does not.
 function defaultResponseFields(type) {
   if (type === 'checkbox') return { checked: false };
@@ -351,7 +364,7 @@ function renderTabs() {
         'title="' + (tabDeleteArmedId === c.id ? 'Click again to remove' : 'Remove checklist') + '">×</button>'
       : '';
     return (
-      '<div class="tab-btn ' + (active ? 'active' : '') + '" role="tab" aria-selected="' + active + '">' +
+      '<div class="tab-btn ' + (active ? 'active' : '') + '" style="border-bottom-color:' + tabColorVarForId(c.id) + '" role="tab" aria-selected="' + active + '">' +
       '<span class="tab-label" data-action="switch-tab" data-id="' + c.id + '">' + escapeHtml(c.title || 'Untitled Checklist') + '</span>' +
       closeBtn +
       '</div>'

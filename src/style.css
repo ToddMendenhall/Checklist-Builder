@@ -15,6 +15,19 @@
 
     --radius-sm: 3px;
     --radius-md: 5px;
+
+    /* "Cypress Blue" tab accent slots (9 hues, sampled from the droplet mark).
+       The two palest steps read as invisible against this light --bg, so those
+       slots borrow the darkest steps instead; dark theme mirrors this below. */
+    --tab-color-0: #003c64;
+    --tab-color-1: #00456f;
+    --tab-color-2: #6ec1e8;
+    --tab-color-3: #2fa4dd;
+    --tab-color-4: #1f8ed6;
+    --tab-color-5: #0071bc;
+    --tab-color-6: #005a94;
+    --tab-color-7: #00456f;
+    --tab-color-8: #003c64;
   }
   :root:not([data-theme="light"]) {
     @media (prefers-color-scheme: dark) {
@@ -24,6 +37,14 @@
       --ink-soft: #b0b7bf;
       --line: rgba(255,255,255,.14);
       --line-strong: #33414d;
+
+      /* Mirrored the other way: the darkest steps disappear against this dark
+         --bg, so those slots borrow the palest steps instead. */
+      --tab-color-0: #e2f2fb;
+      --tab-color-1: #b3ddf4;
+      --tab-color-6: #6ec1e8;
+      --tab-color-7: #b3ddf4;
+      --tab-color-8: #e2f2fb;
     }
   }
   :root[data-theme="dark"] {
@@ -33,6 +54,12 @@
     --ink-soft: #b0b7bf;
     --line: rgba(255,255,255,.14);
     --line-strong: #33414d;
+
+    --tab-color-0: #e2f2fb;
+    --tab-color-1: #b3ddf4;
+    --tab-color-6: #6ec1e8;
+    --tab-color-7: #b3ddf4;
+    --tab-color-8: #e2f2fb;
   }
 
   * { box-sizing: border-box; }
