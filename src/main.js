@@ -14,13 +14,12 @@ var THEME_KEY = 'checklist-collection-theme';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
-// "Cypress Blue" scale (100-900, sampled from the droplet mark) used to give each
-// checklist tab its own accent color, via 9 CSS custom properties (--tab-color-0..8,
-// defined in style.css) rather than raw hex — some steps are illegible against one
-// theme's background, so the CSS substitutes a mirrored step for those slots per
-// theme while this hash-to-slot assignment itself stays theme-agnostic. Assigned per
-// checklist id (stable regardless of tab order or how many other checklists are open).
-var TAB_COLOR_SLOT_COUNT = 9;
+// Checklist tab accent colors: one mid-tone step per hue drawn from the Cypress
+// Blue/Red/Green swatches (see the --tab-color-0.. custom properties in style.css),
+// chosen so every slot has solid contrast against both themes' backgrounds without
+// needing a per-theme override. Assigned per checklist id via a hash (stable
+// regardless of tab order or how many other checklists are open).
+var TAB_COLOR_SLOT_COUNT = 8;
 function tabColorVarForId(id) {
   var hash = 0;
   for (var i = 0; i < id.length; i++) { hash = (hash * 31 + id.charCodeAt(i)) >>> 0; }
