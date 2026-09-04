@@ -125,8 +125,15 @@
   /* collection header */
   .collection-header { padding: 22px 24px 16px; border-bottom: 1px solid var(--line); }
 
-  .cy-logo-wrap { display: inline-block; margin-bottom: 14px; }
+  .collection-header-row { display: flex; align-items: flex-start; gap: 20px; }
+  .collection-header-main { flex: 1; min-width: 0; }
+
+  .cy-logo-wrap { flex-shrink: 0; margin-top: 4px; }
   .cy-logo { display: block; height: 40px; width: auto; }
+  @media (max-width: 520px) {
+    .collection-header-row { flex-direction: column; }
+    .cy-logo-wrap { order: -1; margin-top: 0; margin-bottom: 14px; }
+  }
   .cy-logo-dark { display: none; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .cy-logo-light { display: none; }
