@@ -1,4 +1,7 @@
   :root {
+    /* Neutral 050/100/300/900/500 from the brand swatch (already an exact match
+       pre-existing here) — see the dark block below for the corresponding
+       950/800/700 steps used once the scale runs the other direction. */
     --bg: #f1f3f5;
     --panel: #ffffff;
     --ink: #1b1f24;
@@ -7,10 +10,10 @@
     --line-strong: #b0b7bf;
     --accent-ink: #ffffff;
 
-    --primary: #0f6faf;
-    --primary-hover: #0b5488;
-    --accent: #d8302a;
-    --good: #0a9142;
+    --primary: #0071bc; /* Cypress Blue 600 */
+    --primary-hover: #005a94; /* Cypress Blue 700 */
+    --accent: #cd2026; /* Cypress Red 500 (accent) */
+    --good: #009245; /* Cypress Green 500 (eco) */
     --focus-ring: #2fbedf;
 
     --radius-sm: 3px;
@@ -33,21 +36,24 @@
   }
   :root:not([data-theme="light"]) {
     @media (prefers-color-scheme: dark) {
-      --bg: #161f26;
-      --panel: #232f39;
+      /* Neutral 950/900/800/700/300 — the same brand grayscale as the light
+         theme above, run from the other end, rather than the separate
+         blue-tinted grays this used before. */
+      --bg: #101317;
+      --panel: #1b1f24;
       --ink: #ffffff;
       --ink-soft: #b0b7bf;
-      --line: rgba(255,255,255,.14);
-      --line-strong: #33414d;
+      --line: #2b2f34;
+      --line-strong: #404040;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #161f26;
-    --panel: #232f39;
+    --bg: #101317;
+    --panel: #1b1f24;
     --ink: #ffffff;
     --ink-soft: #b0b7bf;
-    --line: rgba(255,255,255,.14);
-    --line-strong: #33414d;
+    --line: #2b2f34;
+    --line-strong: #404040;
   }
 
   * { box-sizing: border-box; }
@@ -600,6 +606,18 @@
   }
   .btn-primary:disabled { opacity: 0.6; cursor: default; }
   .btn-primary:not(:disabled):hover { background: var(--primary-hover); }
+
+  /* Add item takes the same solid button shape as Export PDF / Clear responses,
+     but in Cypress Green rather than Blue, so it reads as its own kind of action
+     (adding something new) instead of a third equal-weight collection action. */
+  .btn-primary-add { background: var(--good); }
+  .btn-primary-add:not(:disabled):hover { background: #00753a; /* Cypress Green 600 */ }
+
+  /* Clear responses shares Export PDF's solid blue look; while armed (pending a
+     confirming second click) it switches to Cypress Red to signal the
+     destructive action, same as the ghost-button confirm-pending state below. */
+  #resetBtn.confirm-pending { background: var(--accent); }
+  #resetBtn.confirm-pending:hover { background: #a31a1e; /* Cypress Red 600 */ }
 
   .btn-ghost {
     font-family: 'Source Sans 3', sans-serif;
