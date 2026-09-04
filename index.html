@@ -31,6 +31,24 @@
           </label>
         </div>
       </div>
+      <div class="menu-item">
+        <button class="menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">Checklist</button>
+        <div class="menu-dropdown menu-dropdown-wide" role="menu" hidden>
+          <div class="menu-section-label">Add item</div>
+          <input id="newItemLabelHeader" type="text" class="menu-text-input" placeholder="New item label" maxlength="140">
+          <div class="type-select menu-type-select" role="group" aria-label="Response type for new item">
+            <button type="button" class="type-btn active" data-type="checkbox">Check</button>
+            <button type="button" class="type-btn" data-type="text">Text</button>
+            <button type="button" class="type-btn" data-type="photo">Photo</button>
+            <button type="button" class="type-btn" data-type="signoff">Sign-off</button>
+            <button type="button" class="type-btn" data-type="section">Section</button>
+          </div>
+          <button id="addItemBtnHeader" class="btn-add menu-add-item-btn" type="button">Add item</button>
+          <div class="menu-dropdown-divider"></div>
+          <button id="exportPdfBtnHeader" class="menu-dropdown-item" type="button" role="menuitem">Export PDF</button>
+          <button id="resetBtnHeader" class="menu-dropdown-item" type="button" role="menuitem">Clear responses</button>
+        </div>
+      </div>
       <div class="menu-spacer"></div>
       <button id="themeToggle" class="theme-toggle" type="button">Instrument</button>
     </nav>

@@ -6,8 +6,8 @@ A multi-checklist inspection app — tabs of checklists, five item types (checkb
 
 The app window is bookended by two visually distinct strips, in the gray "chrome" tone rather than the checklist's white:
 
-- **Menu bar** (top) — a conventional desktop-style menu bar with dropdowns: **Collection** (export/import the whole collection) and **Templates** (template library, save as template, import template), plus the light/dark theme toggle. Only one dropdown is open at a time; click elsewhere, press Escape, or pick an item to close it.
-- **Footer** (bottom, below the checklist) — adding a new item (label, response type, "Add item") and the per-checklist actions (Export PDF, Clear responses).
+- **Menu bar** (top) — a conventional desktop-style menu bar with dropdowns: **Collection** (export/import the whole collection), **Templates** (template library, save as template, import template), and **Checklist** (add an item, Export PDF, Clear responses), plus the light/dark theme toggle. Only one dropdown is open at a time; click elsewhere or press Escape to close it — picking a one-shot action (Export, Save as template, etc.) closes its menu too, but the Checklist menu's add-item form stays open after each add so you can add several items without reopening it.
+- **Footer** (bottom, below the checklist) — the same add-item form and the same Export PDF / Clear responses actions as the Checklist menu, duplicated here so they're reachable from wherever you're scrolled to. Both copies operate on the same active checklist and stay in sync (e.g. picking a response type in one updates the other); "Clear responses" arms/confirms independently per copy.
 
 Everything in between — the collection title/description, checklist tabs, and the checklist itself — stays on the white panel background.
 

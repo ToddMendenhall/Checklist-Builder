@@ -689,56 +689,70 @@ function endSignatureStroke() {
 itemListEl.addEventListener('pointerup', endSignatureStroke);
 itemListEl.addEventListener('pointercancel', endSignatureStroke);
 
+var newItemLabelHeaderEl = document.getElementById('newItemLabelHeader');
+
 var PLACEHOLDERS = { section: 'Section heading', signoff: 'Sign-off label' };
 typeButtons.forEach(function (b) {
   b.addEventListener('click', function () {
-    typeButtons.forEach(function (x) { x.classList.remove('active'); });
-    b.classList.add('active');
     selectedType = b.dataset.type;
-    newItemLabelEl.placeholder = PLACEHOLDERS[selectedType] || 'New item label';
+    typeButtons.forEach(function (x) { x.classList.toggle('active', x.dataset.type === selectedType); });
+    var placeholder = PLACEHOLDERS[selectedType] || 'New item label';
+    newItemLabelEl.placeholder = placeholder;
+    newItemLabelHeaderEl.placeholder = placeholder;
   });
 });
 
-function addItem() {
-  var label = newItemLabelEl.value.trim();
-  if (!label) { newItemLabelEl.focus(); return; }
+function addItem(labelInputEl) {
+  var label = labelInputEl.value.trim();
+  if (!label) { labelInputEl.focus(); return; }
   var item = Object.assign({ id: uid(), label: label, type: selectedType }, defaultResponseFields(selectedType));
   getActive().items.push(item);
-  newItemLabelEl.value = '';
+  labelInputEl.value = '';
   saveState(); render();
 }
 
-document.getElementById('addItemBtn').addEventListener('click', addItem);
-newItemLabelEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(); });
+document.getElementById('addItemBtn').addEventListener('click', function () { addItem(newItemLabelEl); });
+newItemLabelEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(newItemLabelEl); });
 
-var resetBtn = document.getElementById('resetBtn');
-var resetConfirmTimer = null;
-var resetPendingConfirm = false;
+document.getElementById('addItemBtnHeader').addEventListener('click', function () { addItem(newItemLabelHeaderEl); });
+newItemLabelHeaderEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(newItemLabelHeaderEl); });
 
-resetBtn.addEventListener('click', function () {
-  if (!resetPendingConfirm) {
-    resetPendingConfirm = true;
-    resetBtn.textContent = 'Click again to confirm';
-    resetBtn.classList.add('confirm-pending');
-    resetConfirmTimer = setTimeout(function () {
-      resetPendingConfirm = false;
-      resetBtn.textContent = 'Clear responses';
-      resetBtn.classList.remove('confirm-pending');
-    }, 4000);
-    return;
-  }
-  clearTimeout(resetConfirmTimer);
-  resetPendingConfirm = false;
-  resetBtn.textContent = 'Clear responses';
-  resetBtn.classList.remove('confirm-pending');
-  getActive().items.forEach(function (i) {
-    if (i.type === 'checkbox') i.checked = false;
-    if (i.type === 'text') i.text = '';
-    if (i.type === 'photo') i.photo = null;
-    if (i.type === 'signoff') { i.signature = null; i.name = ''; i.date = ''; }
+// Wires up the "click once to arm, click again within 4s to confirm" pattern used for
+// destructive actions elsewhere (tab close, template delete). Each button tracked
+// independently, so the footer and header copies don't interfere with each other.
+function wireClearResponsesButton(btn, onConfirmed) {
+  var armed = false;
+  var timer = null;
+  var originalText = btn.textContent;
+  btn.addEventListener('click', function () {
+    if (!armed) {
+      armed = true;
+      btn.textContent = 'Click again to confirm';
+      btn.classList.add('confirm-pending');
+      timer = setTimeout(function () {
+        armed = false;
+        btn.textContent = originalText;
+        btn.classList.remove('confirm-pending');
+      }, 4000);
+      return;
+    }
+    clearTimeout(timer);
+    armed = false;
+    btn.textContent = originalText;
+    btn.classList.remove('confirm-pending');
+    getActive().items.forEach(function (i) {
+      if (i.type === 'checkbox') i.checked = false;
+      if (i.type === 'text') i.text = '';
+      if (i.type === 'photo') i.photo = null;
+      if (i.type === 'signoff') { i.signature = null; i.name = ''; i.date = ''; }
+    });
+    saveState(); render();
+    if (onConfirmed) onConfirmed();
   });
-  saveState(); render();
-});
+}
+
+wireClearResponsesButton(document.getElementById('resetBtn'));
+wireClearResponsesButton(document.getElementById('resetBtnHeader'), function () { closeAllMenus(); });
 
 var themeToggle = document.getElementById('themeToggle');
 function currentTheme() {
@@ -1057,11 +1071,10 @@ async function exportCollectionFile() {
   await saveJsonFile(collectionFilename(), collectionToFileText(), 'Checklist Collection');
 }
 
-var exportBtn = document.getElementById('exportPdfBtn');
-exportBtn.addEventListener('click', async function () {
-  exportBtn.disabled = true;
-  var original = exportBtn.textContent;
-  exportBtn.textContent = 'Building PDF…';
+async function exportPdfFromButton(btn) {
+  btn.disabled = true;
+  var original = btn.textContent;
+  btn.textContent = 'Building PDF…';
   try {
     var blob = await buildPdfBlob();
     var active = getActive();
@@ -1070,9 +1083,18 @@ exportBtn.addEventListener('click', async function () {
   } catch (e) {
     alert('Could not build the PDF: ' + (e && e.message ? e.message : e));
   } finally {
-    exportBtn.disabled = false;
-    exportBtn.textContent = original;
+    btn.disabled = false;
+    btn.textContent = original;
   }
+}
+
+var exportBtn = document.getElementById('exportPdfBtn');
+exportBtn.addEventListener('click', function () { exportPdfFromButton(exportBtn); });
+
+var exportBtnHeader = document.getElementById('exportPdfBtnHeader');
+exportBtnHeader.addEventListener('click', function () {
+  closeAllMenus();
+  exportPdfFromButton(exportBtnHeader);
 });
 
 var saveTemplateBtn = document.getElementById('saveTemplateBtn');
@@ -1085,6 +1107,7 @@ var templateDeleteArmedId = null;
 var templateDeleteTimer = null;
 
 saveTemplateBtn.addEventListener('click', function () {
+  closeAllMenus();
   var active = getActive();
   var name = window.prompt('Save as template — name:', active.title || 'Untitled Template');
   if (name === null) return; // cancelled
@@ -1094,6 +1117,8 @@ saveTemplateBtn.addEventListener('click', function () {
   saveTemplates();
 });
 
+var importTemplateLabel = importTemplateInput.closest('label');
+importTemplateLabel.addEventListener('click', closeAllMenus);
 importTemplateInput.addEventListener('change', function () {
   var file = importTemplateInput.files && importTemplateInput.files[0];
   importTemplateInput.value = '';
@@ -1133,6 +1158,7 @@ var exportCollectionBtn = document.getElementById('exportCollectionBtn');
 var importCollectionInput = document.getElementById('importCollectionInput');
 
 exportCollectionBtn.addEventListener('click', async function () {
+  closeAllMenus();
   exportCollectionBtn.disabled = true;
   try {
     await exportCollectionFile();
@@ -1142,6 +1168,9 @@ exportCollectionBtn.addEventListener('click', async function () {
     exportCollectionBtn.disabled = false;
   }
 });
+
+var importCollectionLabel = importCollectionInput.closest('label');
+importCollectionLabel.addEventListener('click', closeAllMenus);
 
 importCollectionInput.addEventListener('change', function () {
   var file = importCollectionInput.files && importCollectionInput.files[0];
@@ -1203,6 +1232,7 @@ function renderTemplateLibrary() {
 }
 
 function openTemplateLibrary() {
+  closeAllMenus();
   renderTemplateLibrary();
   templateLibraryOverlay.hidden = false;
 }
@@ -1293,6 +1323,15 @@ menuTriggers.forEach(function (trigger) {
       trigger.setAttribute('aria-expanded', 'true');
     }
   });
+});
+
+// Clicks inside a dropdown never bubble to the document-level close-on-outside-click
+// handler below — otherwise picking a response type, or arming the two-click "Clear
+// responses" confirm, would immediately close the menu. Actions that should close their
+// menu after running (Export collection, Save as template, etc.) call closeAllMenus()
+// themselves.
+document.querySelectorAll('.menu-dropdown').forEach(function (dd) {
+  dd.addEventListener('click', function (e) { e.stopPropagation(); });
 });
 
 document.addEventListener('click', closeAllMenus);

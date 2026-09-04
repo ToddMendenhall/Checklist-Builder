@@ -108,6 +108,35 @@
     cursor: pointer;
   }
   .menu-dropdown-item:hover { background: var(--bg); color: var(--primary); }
+  .menu-dropdown-item.confirm-pending { color: var(--accent); font-weight: 600; }
+
+  .menu-dropdown-wide { min-width: 300px; }
+  .menu-section-label {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 6px 8px 2px;
+  }
+  .menu-text-input {
+    display: block;
+    width: 100%;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.85rem;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    padding: 6px 8px;
+    margin-bottom: 8px;
+  }
+  .menu-text-input:focus { outline: none; border-bottom-color: var(--primary); }
+  .menu-type-select { margin: 0 8px 10px; }
+  .menu-type-select .type-btn { padding: 6px 8px; font-size: 0.74rem; }
+  .menu-add-item-btn { width: calc(100% - 16px); margin: 0 8px 8px; text-align: center; }
+  .menu-dropdown-divider { height: 1px; background: var(--line); margin: 6px 4px; }
 
   .theme-toggle {
     align-self: center;
