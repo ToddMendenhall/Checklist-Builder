@@ -803,7 +803,7 @@ function loadPdfLogo() {
         } catch (e) { resolve(null); }
       };
       img.onerror = function () { resolve(null); };
-      img.src = '/assets/logo-light.png';
+      img.src = '/assets/Cypress_Logo.png';
     });
   }
   return logoDataPromise;
