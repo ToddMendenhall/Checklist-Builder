@@ -41,9 +41,25 @@ npm run cap:android    # sync + open the Android Studio project
 
 After pulling changes, or on a new machine, run `npx cap sync` to install/update the native plugin dependencies (CocoaPods on iOS, Gradle on Android).
 
+## Install as a PWA (one link, any device)
+
+There's no single installer file that works on both PCs and phones — every OS wants its own package format, and Tauri in particular can only build a given OS's installer by running on that OS. The practical equivalent of "one install" is a **Progressive Web App**: a single URL that any browser, on any device, can install like a native app (an icon on the home screen or in the Start Menu/Applications folder), no app store and no separate download.
+
+This repo deploys to that URL via **GitHub Pages**, built by [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) on every push to the tracked branch (currently `claude/checklist-collection-artifact-nurct8` — update the workflow's `branches:` list once this merges to a permanent default branch). It runs `npm run build:pages`, which is the same Vite build as everything else but with `--base=/Checklist-Builder/` so asset URLs resolve under the project-page subpath, output to `dist/` (kept separate from `www/`, which Capacitor's `cap:sync` expects unchanged). The resulting site is served at:
+
+```
+https://toddmendenhall.github.io/Checklist-Builder/
+```
+
+**One-time setup**: GitHub Pages needs to be enabled with source "GitHub Actions" — go to the repo's Settings → Pages and select that, if the first workflow run doesn't configure it automatically. After that, every push redeploys.
+
+What makes it actually installable, not just a website — `public/manifest.webmanifest` (name, theme color, and icon set generated from the Cypress droplet mark, including a padded "maskable" variant so OS icon masks don't clip it) and `public/sw.js` (a small service worker; `src/main.js` registers it, skipped on Tauri/Capacitor since those already load from a local bundle rather than a real server). The service worker doesn't try to precache an exact file list — Vite's JS/CSS filenames are content-hashed and change every build — instead it caches same-origin requests as they happen and serves from cache first, so a second visit (and basic offline use) doesn't need the network.
+
+To build/preview this variant locally: `npm run build:pages` then `npm run preview:pages`.
+
 ## Desktop
 
-The same `www/` build is a fully installable PWA out of the box (open it in a browser and "Install app"). For a packaged native desktop binary, the app is wrapped with [Tauri](https://tauri.app/) — a system-webview shell, so the shipped binary is a few MB rather than an Electron-sized Chromium bundle. Native project files live in `src-tauri/`.
+For a packaged native desktop binary (as opposed to the PWA install above), the app is wrapped with [Tauri](https://tauri.app/) — a system-webview shell, so the shipped binary is a few MB rather than an Electron-sized Chromium bundle. Native project files live in `src-tauri/`.
 
 ```bash
 npm run desktop:dev     # run the desktop app with hot reload

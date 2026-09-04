@@ -8,6 +8,16 @@ import { save as saveFileDialog } from '@tauri-apps/plugin-dialog';
 import { writeFile as writeTauriFile } from '@tauri-apps/plugin-fs';
 import { jsPDF } from 'jspdf';
 
+// Only register the offline-cache service worker on the deployed web/PWA build —
+// Tauri and Capacitor already load the app from a local bundle, not a real
+// same-origin fetchable server, so a service worker there is unnecessary and,
+// on some native webviews, unsupported.
+if ('serviceWorker' in navigator && !isTauri() && !Capacitor.isNativePlatform()) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(function () {});
+  });
+}
+
 var STORAGE_KEY = 'checklist-collection-state-v1';
 var TEMPLATES_KEY = 'checklist-collection-templates-v1';
 var THEME_KEY = 'checklist-collection-theme';
