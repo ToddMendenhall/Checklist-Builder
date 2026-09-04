@@ -803,7 +803,7 @@ function loadPdfLogo() {
         } catch (e) { resolve(null); }
       };
       img.onerror = function () { resolve(null); };
-      img.src = '/assets/Cypress_Logo.png';
+      img.src = '/assets/logo-light.png';
     });
   }
   return logoDataPromise;
@@ -825,16 +825,6 @@ async function buildPdfBlob() {
     var logoH = 30;
     var logoW = logoH * (logo.width / logo.height);
     doc.addImage(logo.dataUrl, 'PNG', marginX, y - 20, logoW, logoH);
-    var wordmarkX = marginX + logoW + 10;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(216, 48, 42);
-    doc.text('CYPRESS', wordmarkX, y - 7);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(108, 116, 128);
-    doc.text('IN-LINE INSPECTION', wordmarkX, y + 3);
-    doc.setTextColor(20, 20, 20);
     y += logoH + 4;
   } else {
     doc.setFont('helvetica', 'bold');

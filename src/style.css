@@ -135,6 +135,13 @@
     .collection-header-row { flex-direction: column; }
     .cy-logo-wrap { order: -1; margin-top: 0; margin-bottom: 14px; }
   }
+  .cy-logo-dark { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .cy-logo-light { display: none; }
+    :root:not([data-theme="light"]) .cy-logo-dark { display: block; }
+  }
+  :root[data-theme="dark"] .cy-logo-light { display: none; }
+  :root[data-theme="dark"] .cy-logo-dark { display: block; }
 
   .collection-title-input {
     display: block;
