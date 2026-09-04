@@ -2,6 +2,15 @@
 
 A multi-checklist inspection app — tabs of checklists, five item types (checkbox, text, photo, sign-off, section), drag-to-reorder, light/dark theme, and PDF export. Built as a single web codebase (Vite + vanilla JS) wrapped with [Capacitor](https://capacitorjs.com/) for iOS/Android and [Tauri](https://tauri.app/) for a native desktop app (Linux/macOS/Windows), plus a PWA install as a lighter-weight desktop option.
 
+## Layout
+
+The app window is bookended by two visually distinct strips, in the gray "chrome" tone rather than the checklist's white:
+
+- **Menu bar** (top) — a conventional desktop-style menu bar with dropdowns: **Collection** (export/import the whole collection) and **Templates** (template library, save as template, import template), plus the light/dark theme toggle. Only one dropdown is open at a time; click elsewhere, press Escape, or pick an item to close it.
+- **Footer** (bottom, below the checklist) — adding a new item (label, response type, "Add item") and the per-checklist actions (Export PDF, Clear responses).
+
+Everything in between — the collection title/description, checklist tabs, and the checklist itself — stays on the white panel background.
+
 ## Stack
 
 - **UI**: plain HTML/CSS/JS (no framework) — ported from the original Checklist Collection artifact
@@ -63,7 +72,7 @@ There's no server or account involved — sharing a template just means sharing 
 
 ## Sharing a whole collection (with responses)
 
-Templates only ever carry structure. If instead you want to hand someone (or move to another one of your own devices) *everything currently open* — every checklist tab, exactly as filled in: checked boxes, typed answers, attached photos, signatures — use **Export collection…** / **Import collection…**, at the top of the app under the collection title/description.
+Templates only ever carry structure. If instead you want to hand someone (or move to another one of your own devices) *everything currently open* — every checklist tab, exactly as filled in: checked boxes, typed answers, attached photos, signatures — use **Export collection…** / **Import collection…**, under the **Collection** menu in the menu bar.
 
 - **Export collection…** saves the whole collection — `collectionTitle`, `collectionDescription`, and every checklist with its items and their current responses — to one `.json` file, through the same native Save dialog / share sheet / browser download used everywhere else.
 - **Import collection…** reads a collection file and **replaces everything currently open** — this is a destructive action (there's no undo), so it always confirms first, naming the collection it's about to load in place of your current one.

@@ -10,22 +10,37 @@
 </head>
 <body>
   <div class="app">
-    <header class="collection-header">
-      <div class="header-top">
-        <button id="themeToggle" class="theme-toggle" type="button">Instrument</button>
+    <nav class="app-menu-bar" aria-label="Application menu">
+      <div class="menu-item">
+        <button class="menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">Collection</button>
+        <div class="menu-dropdown" role="menu" hidden>
+          <button id="exportCollectionBtn" class="menu-dropdown-item" type="button" role="menuitem">Export collection…</button>
+          <label class="menu-dropdown-item" role="menuitem">Import collection…
+            <input id="importCollectionInput" type="file" accept="application/json,.json" hidden>
+          </label>
+        </div>
       </div>
+      <div class="menu-item">
+        <button class="menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">Templates</button>
+        <div class="menu-dropdown" role="menu" hidden>
+          <button id="openTemplateLibraryBtn" class="menu-dropdown-item" type="button" role="menuitem">Template library</button>
+          <button id="saveTemplateBtn" class="menu-dropdown-item" type="button" role="menuitem">Save as template</button>
+          <label class="menu-dropdown-item" role="menuitem">Import template…
+            <input id="importTemplateInput" type="file" accept="application/json,.json" hidden>
+          </label>
+        </div>
+      </div>
+      <div class="menu-spacer"></div>
+      <button id="themeToggle" class="theme-toggle" type="button">Instrument</button>
+    </nav>
+
+    <header class="collection-header">
       <div class="cy-logo-wrap">
         <img class="cy-logo cy-logo-light" src="/assets/logo-light.png" alt="Cypressili">
         <img class="cy-logo cy-logo-dark" src="/assets/logo-dark.png" alt="Cypressili">
       </div>
       <input id="collectionTitleInput" class="collection-title-input" value="Site Inspection Collection" aria-label="Collection title">
       <textarea id="collectionDescInput" class="collection-desc-input" rows="2" placeholder="Describe this collection of checklists…"></textarea>
-      <div class="collection-actions-row">
-        <button id="exportCollectionBtn" class="btn-ghost" type="button">Export collection…</button>
-        <label class="btn-ghost import-template-label">Import collection…
-          <input id="importCollectionInput" type="file" accept="application/json,.json" hidden>
-        </label>
-      </div>
     </header>
 
     <div class="tab-bar" id="tabBar" role="tablist" aria-label="Checklists"></div>
@@ -44,29 +59,23 @@
 
     <ol id="itemList" class="item-list"></ol>
 
-    <div class="add-row">
-      <input id="newItemLabel" type="text" placeholder="New item label" maxlength="140">
-      <div class="type-select" role="group" aria-label="Response type for new item">
-        <button type="button" class="type-btn active" data-type="checkbox">Check</button>
-        <button type="button" class="type-btn" data-type="text">Text</button>
-        <button type="button" class="type-btn" data-type="photo">Photo</button>
-        <button type="button" class="type-btn" data-type="signoff">Sign-off</button>
-        <button type="button" class="type-btn" data-type="section">Section</button>
+    <div class="checklist-footer">
+      <div class="add-row">
+        <input id="newItemLabel" type="text" placeholder="New item label" maxlength="140">
+        <div class="type-select" role="group" aria-label="Response type for new item">
+          <button type="button" class="type-btn active" data-type="checkbox">Check</button>
+          <button type="button" class="type-btn" data-type="text">Text</button>
+          <button type="button" class="type-btn" data-type="photo">Photo</button>
+          <button type="button" class="type-btn" data-type="signoff">Sign-off</button>
+          <button type="button" class="type-btn" data-type="section">Section</button>
+        </div>
+        <button id="addItemBtn" class="btn-add" type="button">Add item</button>
       </div>
-      <button id="addItemBtn" class="btn-add" type="button">Add item</button>
-    </div>
 
-    <div class="template-row">
-      <button id="openTemplateLibraryBtn" class="btn-ghost" type="button">Template library</button>
-      <button id="saveTemplateBtn" class="btn-ghost" type="button">Save as template</button>
-      <label class="btn-ghost import-template-label">Import template…
-        <input id="importTemplateInput" type="file" accept="application/json,.json" hidden>
-      </label>
-    </div>
-
-    <div class="actions-row">
-      <button id="exportPdfBtn" class="btn-primary" type="button">Export PDF</button>
-      <button id="resetBtn" class="btn-ghost" type="button">Clear responses</button>
+      <div class="actions-row">
+        <button id="exportPdfBtn" class="btn-primary" type="button">Export PDF</button>
+        <button id="resetBtn" class="btn-ghost" type="button">Clear responses</button>
+      </div>
     </div>
   </div>
 

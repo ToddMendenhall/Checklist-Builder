@@ -1275,6 +1275,31 @@ templateLibraryList.addEventListener('click', async function (e) {
   }
 });
 
+var menuTriggers = document.querySelectorAll('.menu-trigger');
+
+function closeAllMenus() {
+  document.querySelectorAll('.menu-dropdown').forEach(function (dd) { dd.hidden = true; });
+  menuTriggers.forEach(function (t) { t.setAttribute('aria-expanded', 'false'); });
+}
+
+menuTriggers.forEach(function (trigger) {
+  trigger.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var panel = trigger.parentElement.querySelector('.menu-dropdown');
+    var wasOpen = !panel.hidden;
+    closeAllMenus();
+    if (!wasOpen) {
+      panel.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+  });
+});
+
+document.addEventListener('click', closeAllMenus);
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeAllMenus();
+});
+
 async function init() {
   state = await loadState();
   templates = await loadTemplates();
