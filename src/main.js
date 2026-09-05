@@ -140,10 +140,14 @@ function createTemplateFromChecklist(checklist, title) {
     id: uid(),
     title: (title && title.trim()) || checklist.title || 'Untitled Template',
     description: '',
-    items: checklist.items.map(templateItemFromItem)
+    items: checklist.items.map(templateItemFromItem),
+    locked: false
   };
 }
 
+// A locked template's checklists start locked too — locking a template only ever
+// makes sense through this inheritance, since templates have no items UI of their
+// own to protect (they're structure snapshots, edited only via rename/description).
 function checklistFromTemplate(template) {
   return newChecklist({
     title: template.title,
@@ -152,7 +156,8 @@ function checklistFromTemplate(template) {
         { id: uid(), label: templateItem.label, type: templateItem.type },
         defaultResponseFields(templateItem.type)
       );
-    })
+    }),
+    locked: !!template.locked
   });
 }
 
@@ -177,7 +182,8 @@ function templateToPlainObject(template) {
   return {
     title: template.title,
     description: template.description || '',
-    items: template.items.map(templateItemFromItem)
+    items: template.items.map(templateItemFromItem),
+    locked: !!template.locked
   };
 }
 
@@ -212,7 +218,8 @@ function templateFromRaw(raw) {
     description: (raw && raw.description && String(raw.description)) || '',
     items: (raw && Array.isArray(raw.items) ? raw.items : [])
       .filter(function (item) { return item && typeof item.label === 'string' && typeof item.type === 'string'; })
-      .map(function (item) { return { id: uid(), label: item.label, type: item.type }; })
+      .map(function (item) { return { id: uid(), label: item.label, type: item.type }; }),
+    locked: !!(raw && raw.locked)
   };
 }
 
@@ -1265,15 +1272,19 @@ importCollectionInput.addEventListener('change', function () {
 function templateCardHtml(t) {
   var count = t.items.length;
   var deleteArmed = templateDeleteArmedId === t.id;
+  var lockBadge = t.locked ? '<span class="tab-lock" title="Locked — checklists made from this template start locked">' + LOCK_SVG + '</span>' : '';
   return (
     '<div class="template-card" data-id="' + t.id + '">' +
       '<div class="template-card-main">' +
-        '<div class="template-card-title">' + escapeHtml(t.title || 'Untitled Template') + '</div>' +
+        '<div class="template-card-title">' + lockBadge + escapeHtml(t.title || 'Untitled Template') + '</div>' +
         (t.description ? '<div class="template-card-desc">' + escapeHtml(t.description) + '</div>' : '') +
         '<div class="template-card-meta">' + count + (count === 1 ? ' item' : ' items') + '</div>' +
       '</div>' +
       '<div class="template-card-actions">' +
         '<button type="button" class="btn-add" data-action="new-checklist" data-id="' + t.id + '">New checklist</button>' +
+        '<button type="button" class="btn-ghost ' + (t.locked ? 'is-locked' : '') + '" data-action="toggle-lock" data-id="' + t.id + '">' +
+          (t.locked ? 'Unlock template' : 'Lock template') +
+        '</button>' +
         '<button type="button" class="btn-ghost" data-action="export" data-id="' + t.id + '">Export…</button>' +
         '<button type="button" class="btn-ghost" data-action="rename" data-id="' + t.id + '">Rename</button>' +
         '<button type="button" class="btn-ghost" data-action="edit-description" data-id="' + t.id + '">' +
@@ -1330,6 +1341,10 @@ templateLibraryList.addEventListener('click', async function (e) {
     state.activeId = checklist.id;
     saveState(); render();
     closeTemplateLibrary();
+  } else if (action === 'toggle-lock') {
+    template.locked = !template.locked;
+    saveTemplates();
+    renderTemplateLibrary();
   } else if (action === 'export') {
     btn.disabled = true;
     try {
