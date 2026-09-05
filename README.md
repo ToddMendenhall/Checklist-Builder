@@ -99,6 +99,10 @@ Because this format includes responses, an exported collection file can contain 
 
 Tapping "Add photo" on a photo-type item behaves differently by platform: on iOS/Android it calls `@capacitor/camera`'s `Camera.getPhoto()` with `source: CameraSource.Prompt`, which shows the native "Take Photo / Choose from Library" action sheet — the plugin also handles downscaling (`width: 1600`) and EXIF orientation correction itself. On the web and desktop (Tauri included, since it isn't a platform the Capacitor plugin knows about) it falls back to a plain file input, with the same resizing/JPEG re-encoding done manually in `resizePhotoFile()`. Either path lands on the same `item.photo = { dataUrl, width, height }` shape, so the rest of the app (thumbnail display, PDF embedding) doesn't need to know which path was used. Cancelling the native picker is treated as a no-op, not an error.
 
+## Locking a checklist
+
+Once a checklist's structure is finalized (or someone else is out in the field filling it in), "Lock checklist" — in the Checklist menu or the footer — freezes its item list: no adding, removing, or drag-reordering items, on either the header or footer controls, until it's unlocked again. Everything else about *using* the checklist still works while locked — checking boxes, typing responses, attaching photos, drawing signatures, even Clear responses — since the point is to protect the checklist's shape, not stop anyone from filling it in. A locked checklist shows a small lock icon on its tab so it's visible without opening either menu. The lock state is per-checklist (each tab locks independently) and travels with a checklist through collection export/import, but not through templates or PDF export, since those only ever carry structure or a point-in-time snapshot.
+
 ## Known follow-ups
 
 - Google Fonts are loaded from a CDN; the type stacks fall back to system fonts if offline, but self-hosting the fonts would make the UI fully offline-consistent.

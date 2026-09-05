@@ -260,6 +260,13 @@
     white-space: nowrap;
     max-width: 180px;
   }
+  .tab-lock {
+    display: inline-flex;
+    color: var(--ink-soft);
+    margin-right: 5px;
+    vertical-align: -1px;
+  }
+  .tab-btn.active .tab-lock { color: var(--accent); }
   .tab-close {
     display: flex;
     align-items: center;
@@ -338,6 +345,15 @@
 
   /* item list */
   .item-list { list-style: none; margin: 0; padding: 0; }
+  /* Locked: item structure is frozen (no add/remove/reorder) but responses —
+     checkboxes, text, photos, signatures — stay fully editable. The handle/remove
+     controls keep their grid space (visibility, not display) so rows don't reflow
+     when a checklist is locked or unlocked. */
+  .item-list.locked .drag-handle,
+  .item-list.locked .item-remove {
+    visibility: hidden;
+    pointer-events: none;
+  }
 
   .item {
     display: grid;
@@ -558,6 +574,7 @@
     padding: 6px 2px;
   }
   #newItemLabel:focus { outline: none; border-bottom-color: var(--primary); }
+  #newItemLabel:disabled, #newItemLabelHeader:disabled { opacity: 0.5; }
 
   .type-select { display: flex; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
   .type-btn {
@@ -571,6 +588,7 @@
   }
   .type-btn + .type-btn { border-left: 1px solid var(--line); }
   .type-btn.active { background: var(--primary); color: #ffffff; }
+  .type-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-add {
     font-family: 'Source Sans 3', sans-serif;
@@ -584,6 +602,7 @@
     cursor: pointer;
   }
   .btn-add:hover { border-color: var(--primary); color: var(--primary); }
+  .btn-add:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--line-strong); color: var(--ink-soft); }
 
   .actions-row {
     display: flex;
@@ -593,6 +612,12 @@
     gap: 12px;
     flex-wrap: wrap;
   }
+  .actions-row-group { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* The lock toggle turns accent-red once engaged — same "this needs attention
+     before you'd undo it" signal as the confirm-pending states elsewhere — so a
+     locked checklist reads as locked at a glance in either the menu or the footer. */
+  .btn-ghost.is-locked, .menu-dropdown-item.is-locked { color: var(--accent); font-weight: 600; }
   .btn-primary {
     font-family: 'Source Sans 3', sans-serif;
     font-weight: 600;

@@ -41,6 +41,8 @@
       <div class="menu-item">
         <button class="menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">Checklist</button>
         <div class="menu-dropdown menu-dropdown-wide" role="menu" hidden>
+          <button id="lockChecklistBtnHeader" class="menu-dropdown-item" type="button" role="menuitem">Lock checklist</button>
+          <div class="menu-dropdown-divider"></div>
           <div class="menu-section-label">Add item</div>
           <input id="newItemLabelHeader" type="text" class="menu-text-input" placeholder="New item label" maxlength="140">
           <div class="type-select menu-type-select" role="group" aria-label="Response type for new item">
@@ -103,8 +105,11 @@
       </div>
 
       <div class="actions-row">
-        <button id="exportPdfBtn" class="btn-primary" type="button">Export PDF</button>
-        <button id="resetBtn" class="btn-primary" type="button">Clear responses</button>
+        <button id="lockChecklistBtn" class="btn-ghost" type="button">Lock checklist</button>
+        <div class="actions-row-group">
+          <button id="exportPdfBtn" class="btn-primary" type="button">Export PDF</button>
+          <button id="resetBtn" class="btn-primary" type="button">Clear responses</button>
+        </div>
       </div>
     </div>
   </div>

@@ -60,7 +60,11 @@ function newChecklist(seed) {
     title: (seed && seed.title) || 'Untitled Checklist',
     inspector: '',
     date: '',
-    items: (seed && seed.items) || []
+    items: (seed && seed.items) || [],
+    // Locking freezes the item list (add/remove/reorder) so a filled-in checklist
+    // can't be structurally changed by accident while still being used — checking
+    // boxes, typing responses, photos, and signatures stay editable regardless.
+    locked: !!(seed && seed.locked)
   };
 }
 
@@ -238,7 +242,7 @@ function collectionToFileText() {
       collectionTitle: state.collectionTitle,
       collectionDescription: state.collectionDescription,
       checklists: state.checklists.map(function (c) {
-        return { title: c.title, inspector: c.inspector, date: c.date, items: c.items };
+        return { title: c.title, inspector: c.inspector, date: c.date, items: c.items, locked: !!c.locked };
       })
     }
   }, null, 2);
@@ -256,7 +260,8 @@ function checklistFromRaw(raw) {
     date: (raw && raw.date && String(raw.date)) || '',
     items: (raw && Array.isArray(raw.items) ? raw.items : [])
       .filter(function (item) { return item && typeof item.label === 'string' && typeof item.type === 'string'; })
-      .map(function (item) { return Object.assign({}, item, { id: uid() }); })
+      .map(function (item) { return Object.assign({}, item, { id: uid() }); }),
+    locked: !!(raw && raw.locked)
   };
 }
 
@@ -298,6 +303,7 @@ var dragState = null;
 var tabDeleteArmedId = null;
 var tabDeleteTimer = null;
 var GRIP_SVG = '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="6" cy="4" r="1.6"/><circle cx="14" cy="4" r="1.6"/><circle cx="6" cy="10" r="1.6"/><circle cx="14" cy="10" r="1.6"/><circle cx="6" cy="16" r="1.6"/><circle cx="14" cy="16" r="1.6"/></svg>';
+var LOCK_SVG = '<svg viewBox="0 0 20 20" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 9V6.5a4 4 0 0 1 8 0V9"/><rect x="4.5" y="9" width="11" height="8" rx="1.6" fill="currentColor" stroke="none"/></svg>';
 
 function itemTemplate(item, num) {
   if (item.type === 'section') {
@@ -372,9 +378,10 @@ function renderTabs() {
         'data-action="delete-tab" data-id="' + c.id + '" aria-label="Remove checklist" ' +
         'title="' + (tabDeleteArmedId === c.id ? 'Click again to remove' : 'Remove checklist') + '">×</button>'
       : '';
+    var lockBadge = c.locked ? '<span class="tab-lock" title="Locked — item list can\'t be changed">' + LOCK_SVG + '</span>' : '';
     return (
       '<div class="tab-btn ' + (active ? 'active' : '') + '" style="border-bottom-color:' + tabColorVarForId(c.id) + '" role="tab" aria-selected="' + active + '">' +
-      '<span class="tab-label" data-action="switch-tab" data-id="' + c.id + '">' + escapeHtml(c.title || 'Untitled Checklist') + '</span>' +
+      '<span class="tab-label" data-action="switch-tab" data-id="' + c.id + '">' + lockBadge + escapeHtml(c.title || 'Untitled Checklist') + '</span>' +
       closeBtn +
       '</div>'
     );
@@ -403,11 +410,29 @@ function render() {
       return itemTemplate(item, counter);
     }).join('');
   }
+  itemListEl.classList.toggle('locked', !!active.locked);
   if (dragState) {
     var draggedEl = itemListEl.querySelector('[data-id="' + dragState.id + '"]');
     if (draggedEl) draggedEl.classList.add('dragging');
   }
   setupSignatureCanvases();
+  updateLockUI(active);
+}
+
+// Add-item controls (both the header form and the footer form) get disabled while
+// the active checklist is locked; the lock toggle buttons' own label reflects the
+// current state. The item list's own drag/remove controls are handled via the
+// #itemList.locked CSS rule plus guards in their click/pointerdown handlers.
+function updateLockUI(active) {
+  var locked = !!active.locked;
+  [newItemLabelEl, newItemLabelHeaderEl, addItemBtn, addItemBtnHeader].forEach(function (el) {
+    el.disabled = locked;
+  });
+  typeButtons.forEach(function (b) { b.disabled = locked; });
+  [lockChecklistBtn, lockChecklistBtnHeader].forEach(function (btn) {
+    btn.textContent = locked ? 'Unlock checklist' : 'Lock checklist';
+    btn.classList.toggle('is-locked', locked);
+  });
 }
 
 function setupSignatureCanvases() {
@@ -501,6 +526,7 @@ itemListEl.addEventListener('click', function (e) {
     item.checked = !item.checked;
     saveState(); render();
   } else if (action === 'delete') {
+    if (active.locked) return;
     active.items = active.items.filter(function (i) { return i.id !== id; });
     saveState(); render();
   } else if (action === 'remove-photo' && item) {
@@ -662,6 +688,7 @@ function onDragEnd() {
 itemListEl.addEventListener('pointerdown', function (e) {
   var handle = e.target.closest('.drag-handle');
   if (!handle) return;
+  if (getActive().locked) return;
   var li = handle.closest('.item');
   if (!li) return;
   e.preventDefault();
@@ -725,6 +752,7 @@ typeButtons.forEach(function (b) {
 });
 
 function addItem(labelInputEl) {
+  if (getActive().locked) return;
   var label = labelInputEl.value.trim();
   if (!label) { labelInputEl.focus(); return; }
   var item = Object.assign({ id: uid(), label: label, type: selectedType }, defaultResponseFields(selectedType));
@@ -733,11 +761,25 @@ function addItem(labelInputEl) {
   saveState(); render();
 }
 
-document.getElementById('addItemBtn').addEventListener('click', function () { addItem(newItemLabelEl); });
+var addItemBtn = document.getElementById('addItemBtn');
+var addItemBtnHeader = document.getElementById('addItemBtnHeader');
+
+addItemBtn.addEventListener('click', function () { addItem(newItemLabelEl); });
 newItemLabelEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(newItemLabelEl); });
 
-document.getElementById('addItemBtnHeader').addEventListener('click', function () { addItem(newItemLabelHeaderEl); });
+addItemBtnHeader.addEventListener('click', function () { addItem(newItemLabelHeaderEl); });
 newItemLabelHeaderEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(newItemLabelHeaderEl); });
+
+var lockChecklistBtn = document.getElementById('lockChecklistBtn');
+var lockChecklistBtnHeader = document.getElementById('lockChecklistBtnHeader');
+
+function toggleLock() {
+  var active = getActive();
+  active.locked = !active.locked;
+  saveState(); render();
+}
+lockChecklistBtn.addEventListener('click', toggleLock);
+lockChecklistBtnHeader.addEventListener('click', function () { toggleLock(); closeAllMenus(); });
 
 // Wires up the "click once to arm, click again within 4s to confirm" pattern used for
 // destructive actions elsewhere (tab close, template delete). Each button tracked
