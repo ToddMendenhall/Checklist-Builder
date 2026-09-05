@@ -618,6 +618,7 @@
      before you'd undo it" signal as the confirm-pending states elsewhere — so a
      locked checklist reads as locked at a glance in either the menu or the footer. */
   .btn-ghost.is-locked, .menu-dropdown-item.is-locked { color: var(--accent); font-weight: 600; }
+
   .btn-primary {
     font-family: 'Source Sans 3', sans-serif;
     font-weight: 600;
@@ -643,6 +644,15 @@
      destructive action, same as the ghost-button confirm-pending state below. */
   #resetBtn.confirm-pending { background: var(--accent); }
   #resetBtn.confirm-pending:hover { background: #a31a1e; /* Cypress Red 600 */ }
+
+  /* Footer's lock toggle is a solid button too, in a neutral gray (neither the
+     Blue of Export PDF/Clear responses nor the Green of Add item) so it doesn't
+     compete for attention while idle — until engaged, when it switches to the
+     same accent red as the confirm-pending states and the menu's lock item. */
+  .btn-primary-lock { background: #595959; /* Neutral 600 */ }
+  .btn-primary-lock:not(:disabled):hover { background: #404040; /* Neutral 700 */ }
+  .btn-primary-lock.is-locked { background: var(--accent); }
+  .btn-primary-lock.is-locked:not(:disabled):hover { background: #a31a1e; /* Cypress Red 600 */ }
 
   .btn-ghost {
     font-family: 'Source Sans 3', sans-serif;
