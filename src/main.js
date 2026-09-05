@@ -141,7 +141,7 @@ function createTemplateFromChecklist(checklist, title) {
     title: (title && title.trim()) || checklist.title || 'Untitled Template',
     description: '',
     items: checklist.items.map(templateItemFromItem),
-    locked: false
+    locked: !!checklist.locked
   };
 }
 
