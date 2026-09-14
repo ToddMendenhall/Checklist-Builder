@@ -100,7 +100,13 @@ async function loadState() {
 
 function saveState() {
   Preferences.set({ key: STORAGE_KEY, value: JSON.stringify(state) })
+    .then(function () { stampAutosave(); })
     .catch(function () { /* storage full or unavailable; edits stay in-memory only */ });
+}
+
+function stampAutosave() {
+  var time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  autosaveStampEl.textContent = 'Saved ' + time;
 }
 
 var state;
@@ -299,80 +305,172 @@ function collectionFromFileText(text) {
 var itemListEl = document.getElementById('itemList');
 var tabBarEl = document.getElementById('tabBar');
 var collectionTitleInput = document.getElementById('collectionTitleInput');
-var collectionDescInput = document.getElementById('collectionDescInput');
 var checklistTitleInput = document.getElementById('checklistTitleInput');
 var inspectorInput = document.getElementById('inspectorInput');
 var dateInput = document.getElementById('dateInput');
 var newItemLabelEl = document.getElementById('newItemLabel');
 var typeButtons = document.querySelectorAll('.type-btn');
+var progressCountEl = document.getElementById('progressCount');
+var progressFillEl = document.getElementById('progressFill');
+var progressSrEl = document.getElementById('progressSr');
+var remainingCountEl = document.getElementById('remainingCount');
+var autosaveStampEl = document.getElementById('autosaveStamp');
 var selectedType = 'checkbox';
 var dragState = null;
+var longPressTimer = null;
 var tabDeleteArmedId = null;
 var tabDeleteTimer = null;
+var itemDeleteArmedId = null;
+var itemDeleteTimer = null;
+var deleteChecklistArmed = false;
+var deleteChecklistTimer = null;
+var openItemMenuId = null;
+// Sign-off items show a compact "signed" card once they carry a valid signature,
+// instead of the draw/type editing UI — this set tracks which signed items the
+// user has explicitly reopened for editing (via the card's "Edit" link), so
+// re-signing collapses back to the card rather than staying open indefinitely.
+var signoffEditingIds = new Set();
 var GRIP_SVG = '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="6" cy="4" r="1.6"/><circle cx="14" cy="4" r="1.6"/><circle cx="6" cy="10" r="1.6"/><circle cx="14" cy="10" r="1.6"/><circle cx="6" cy="16" r="1.6"/><circle cx="14" cy="16" r="1.6"/></svg>';
 var LOCK_SVG = '<svg viewBox="0 0 20 20" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 9V6.5a4 4 0 0 1 8 0V9"/><rect x="4.5" y="9" width="11" height="8" rx="1.6" fill="currentColor" stroke="none"/></svg>';
 
-function itemTemplate(item, num) {
-  if (item.type === 'section') {
-    return (
-      '<li class="item item-section" data-id="' + item.id + '">' +
-      '<span class="drag-handle" title="Drag to reorder">' + GRIP_SVG + '</span>' +
-      '<span class="section-label">' + escapeHtml(item.label) + '</span>' +
-      '<button type="button" class="item-remove" data-action="delete" data-id="' + item.id + '" aria-label="Remove section">×</button>' +
-      '</li>'
-    );
+// An item "answers" when it carries a real response; sections never count toward
+// either side of the fraction. Used for the tab/header/action-bar completion counts.
+function isItemAnswered(item) {
+  if (item.type === 'checkbox') return !!item.checked;
+  if (item.type === 'text') return !!(item.text && item.text.trim());
+  if (item.type === 'photo') return !!item.photo;
+  if (item.type === 'signoff') {
+    return (item.mode !== 'type' && !!item.signature) || (item.mode === 'type' && !!(item.name && item.name.trim()));
   }
+  return false;
+}
+function checklistProgress(checklist) {
+  var answerable = checklist.items.filter(function (i) { return i.type !== 'section'; });
+  var answered = answerable.filter(isItemAnswered).length;
+  return { answered: answered, total: answerable.length };
+}
+
+var TYPE_META_LABEL = { checkbox: 'CHECK', text: 'TEXT', photo: 'PHOTO', signoff: 'SIGN-OFF' };
+
+function itemMenuHtml(item, idx, itemsLen) {
+  var open = openItemMenuId === item.id;
+  var deleteArmed = itemDeleteArmedId === item.id;
+  return (
+    '<div class="item-menu-wrap">' +
+      '<button type="button" class="item-menu" data-action="open-item-menu" data-id="' + item.id + '" aria-label="Item actions" aria-haspopup="true" aria-expanded="' + open + '">⋮</button>' +
+      '<div class="item-popover" role="menu"' + (open ? '' : ' hidden') + '>' +
+        '<button type="button" role="menuitem" data-action="move-up" data-id="' + item.id + '"' + (idx === 0 ? ' disabled' : '') + '>Move up</button>' +
+        '<button type="button" role="menuitem" data-action="move-down" data-id="' + item.id + '"' + (idx === itemsLen - 1 ? ' disabled' : '') + '>Move down</button>' +
+        '<button type="button" role="menuitem" data-action="duplicate-item" data-id="' + item.id + '">Duplicate</button>' +
+        '<button type="button" role="menuitem" class="item-popover-delete ' + (deleteArmed ? 'confirm-pending' : '') + '" data-action="delete" data-id="' + item.id + '">' +
+          (deleteArmed ? 'Click again to delete' : 'Delete') +
+        '</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function sectionTemplate(item, idx, itemsLen, sectionCount) {
+  return (
+    '<li class="section-head" data-id="' + item.id + '" role="presentation">' +
+      '<span class="section-label">' + escapeHtml(item.label) + '</span>' +
+      '<span class="section-rule"></span>' +
+      '<span class="section-count">' + sectionCount + (sectionCount === 1 ? ' item' : ' items') + '</span>' +
+      '<span class="drag-handle" title="Drag to reorder">' + GRIP_SVG + '</span>' +
+      itemMenuHtml(item, idx, itemsLen) +
+    '</li>'
+  );
+}
+
+function itemTemplate(item, num, idx, itemsLen) {
   var numStr = String(num).padStart(2, '0');
-  var responseHtml = '';
+  var answered = isItemAnswered(item);
+  var metaLabel = numStr + ' · ' + (TYPE_META_LABEL[item.type] || item.type.toUpperCase());
+
+  var toggleHtml;
   if (item.type === 'checkbox') {
-    responseHtml =
+    toggleHtml =
       '<button type="button" class="check-toggle ' + (item.checked ? 'checked' : '') + '" ' +
-      'data-action="toggle" data-id="' + item.id + '" aria-pressed="' + !!item.checked + '" aria-label="Mark checked">' +
+      'data-action="toggle" data-id="' + item.id + '" aria-pressed="' + !!item.checked + '" aria-labelledby="item-label-' + item.id + '">' +
       '<svg viewBox="0 0 24 24" class="check-mark"><path d="M4 12.5 L9.5 18 L20 5" /></svg>' +
       '</button>';
-  } else if (item.type === 'text') {
+  } else {
+    // Read-only completion indicator for non-checkbox rows — not interactive,
+    // the item's own response (text/photo/signature) is what's answered.
+    toggleHtml =
+      '<span class="check-toggle ' + (answered ? 'checked' : '') + '" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" class="check-mark"><path d="M4 12.5 L9.5 18 L20 5" /></svg>' +
+      '</span>';
+  }
+
+  var responseHtml = '';
+  if (item.type === 'text') {
     responseHtml =
+      '<div class="item-response">' +
       '<input type="text" class="response-text" data-action="text" data-id="' + item.id + '" ' +
-      'value="' + escapeHtml(item.text || '') + '" placeholder="Response">';
+      'value="' + escapeHtml(item.text || '') + '" placeholder="Response">' +
+      '</div>';
   } else if (item.type === 'photo') {
     if (item.photo) {
       responseHtml =
-        '<div class="photo-wrap">' +
+        '<div class="item-response"><div class="photo-row"><div class="photo-wrap">' +
         '<img src="' + item.photo.dataUrl + '" class="photo-thumb" alt="Attached photo">' +
         '<button type="button" class="photo-remove" data-action="remove-photo" data-id="' + item.id + '" aria-label="Remove photo">×</button>' +
-        '</div>';
+        '</div></div></div>';
     } else {
       responseHtml =
-        '<button type="button" class="photo-btn" data-action="photo" data-id="' + item.id + '">Add photo</button>';
+        '<div class="item-response"><div class="photo-row">' +
+        '<button type="button" class="photo-btn" data-action="photo" data-id="' + item.id + '">＋ Add photo</button>' +
+        '</div></div>';
     }
   } else if (item.type === 'signoff') {
-    var isDraw = item.mode !== 'type';
-    responseHtml =
-      '<div class="signoff-panel">' +
-        '<div class="signoff-toggle" role="group" aria-label="Sign-off input mode">' +
-          '<button type="button" class="mode-btn ' + (isDraw ? 'active' : '') + '" data-action="mode" data-mode="draw" data-id="' + item.id + '">Draw</button>' +
-          '<button type="button" class="mode-btn ' + (!isDraw ? 'active' : '') + '" data-action="mode" data-mode="type" data-id="' + item.id + '">Type</button>' +
-        '</div>' +
-        (isDraw
-          ? '<div class="signoff-draw-wrap">' +
-              '<canvas class="signature-canvas" data-id="' + item.id + '"></canvas>' +
-              '<button type="button" class="signoff-clear" data-action="clear-signature" data-id="' + item.id + '">Clear</button>' +
-            '</div>'
-          : '<input type="text" class="signoff-name-input" data-action="signoff-name" data-id="' + item.id + '" ' +
-            'value="' + escapeHtml(item.name || '') + '" placeholder="Type your name">'
-        ) +
-        '<label class="meta-field signoff-date-field">Date' +
-          '<input type="date" class="signoff-date-input" data-action="signoff-date" data-id="' + item.id + '" value="' + escapeHtml(item.date || '') + '">' +
-        '</label>' +
-      '</div>';
+    var isSigned = answered;
+    var showEditing = !isSigned || signoffEditingIds.has(item.id);
+    if (showEditing) {
+      var isDraw = item.mode !== 'type';
+      responseHtml =
+        '<div class="item-response"><div class="signoff-panel">' +
+          '<div class="signoff-toggle" role="group" aria-label="Sign-off input mode">' +
+            '<button type="button" class="mode-btn ' + (isDraw ? 'active' : '') + '" data-action="mode" data-mode="draw" data-id="' + item.id + '">Draw</button>' +
+            '<button type="button" class="mode-btn ' + (!isDraw ? 'active' : '') + '" data-action="mode" data-mode="type" data-id="' + item.id + '">Type</button>' +
+          '</div>' +
+          (isDraw
+            ? '<div class="signoff-draw-wrap">' +
+                '<canvas class="signature-canvas" data-id="' + item.id + '"></canvas>' +
+                '<button type="button" class="signoff-clear" data-action="clear-signature" data-id="' + item.id + '">Clear</button>' +
+              '</div>'
+            : '<input type="text" class="signoff-name-input" data-action="signoff-name" data-id="' + item.id + '" ' +
+              'value="' + escapeHtml(item.name || '') + '" placeholder="Type your name">'
+          ) +
+          '<label class="meta-field signoff-date-field">Date' +
+            '<input type="date" class="signoff-date-input" data-action="signoff-date" data-id="' + item.id + '" value="' + escapeHtml(item.date || '') + '">' +
+          '</label>' +
+        '</div></div>';
+    } else {
+      var signedMark = item.mode !== 'type'
+        ? '<span class="signoff-signed-mark"><img src="' + item.signature + '" alt="Signature"></span>'
+        : '<span class="signoff-signed-mark signoff-signed-name">' + escapeHtml(item.name) + '</span>';
+      responseHtml =
+        '<div class="item-response"><div class="signoff-signed-card">' +
+          signedMark +
+          '<div class="signoff-signed-rule"></div>' +
+          '<div class="signoff-signed-meta"><span>Signed</span><span>' + (item.date ? escapeHtml(item.date) : '') + '</span></div>' +
+          '<button type="button" class="signoff-edit-btn" data-action="edit-signoff" data-id="' + item.id + '">Edit</button>' +
+        '</div></div>';
+    }
   }
+
+  var bodyToggleAttrs = item.type === 'checkbox' ? ' data-action="toggle" data-id="' + item.id + '"' : '';
   return (
-    '<li class="item' + (item.type === 'signoff' ? ' item-signoff' : '') + '" data-id="' + item.id + '">' +
+    '<li class="item" data-id="' + item.id + '" data-type="' + item.type + '">' +
+    toggleHtml +
+    '<div class="item-body"' + bodyToggleAttrs + '>' +
+      '<div class="item-label" id="item-label-' + item.id + '">' + escapeHtml(item.label) + '</div>' +
+      '<div class="item-meta">' + metaLabel + '</div>' +
+      responseHtml +
+    '</div>' +
     '<span class="drag-handle" title="Drag to reorder">' + GRIP_SVG + '</span>' +
-    '<span class="item-num">' + numStr + '</span>' +
-    '<span class="item-label">' + escapeHtml(item.label) + '</span>' +
-    '<span class="item-response">' + responseHtml + '</span>' +
-    '<button type="button" class="item-remove" data-action="delete" data-id="' + item.id + '" aria-label="Remove item">×</button>' +
+    itemMenuHtml(item, idx, itemsLen) +
     '</li>'
   );
 }
@@ -386,9 +484,14 @@ function renderTabs() {
         'title="' + (tabDeleteArmedId === c.id ? 'Click again to remove' : 'Remove checklist') + '">×</button>'
       : '';
     var lockBadge = c.locked ? '<span class="tab-lock" title="Locked — item list can\'t be changed">' + LOCK_SVG + '</span>' : '';
+    var progress = checklistProgress(c);
+    var countHtml = progress.total
+      ? '<span class="tab-count' + (progress.answered === progress.total ? ' complete' : '') + '">' + progress.answered + '/' + progress.total + '</span>'
+      : '';
     return (
       '<div class="tab-btn ' + (active ? 'active' : '') + '" style="border-bottom-color:' + tabColorVarForId(c.id) + '" role="tab" aria-selected="' + active + '">' +
       '<span class="tab-label" data-action="switch-tab" data-id="' + c.id + '">' + lockBadge + escapeHtml(c.title || 'Untitled Checklist') + '</span>' +
+      countHtml +
       closeBtn +
       '</div>'
     );
@@ -398,7 +501,6 @@ function renderTabs() {
 
 function render() {
   collectionTitleInput.value = state.collectionTitle;
-  collectionDescInput.value = state.collectionDescription;
   document.title = state.collectionTitle || 'Checklist Collection';
 
   renderTabs();
@@ -408,13 +510,19 @@ function render() {
   inspectorInput.value = active.inspector;
   dateInput.value = active.date;
 
-  if (active.items.length === 0) {
+  var items = active.items;
+  if (items.length === 0) {
     itemListEl.innerHTML = '<li class="empty-note">No items yet — add one below.</li>';
   } else {
     var counter = 0;
-    itemListEl.innerHTML = active.items.map(function (item) {
-      if (item.type !== 'section') counter++;
-      return itemTemplate(item, counter);
+    itemListEl.innerHTML = items.map(function (item, idx) {
+      if (item.type === 'section') {
+        var sectionCount = 0;
+        for (var j = idx + 1; j < items.length && items[j].type !== 'section'; j++) sectionCount++;
+        return sectionTemplate(item, idx, items.length, sectionCount);
+      }
+      counter++;
+      return itemTemplate(item, counter, idx, items.length);
     }).join('');
   }
   itemListEl.classList.toggle('locked', !!active.locked);
@@ -424,22 +532,33 @@ function render() {
   }
   setupSignatureCanvases();
   updateLockUI(active);
+  updateProgressUI(active);
+  deleteChecklistBtn.disabled = state.checklists.length <= 1;
 }
 
-// Add-item controls (both the header form and the footer form) get disabled while
-// the active checklist is locked; the lock toggle buttons' own label reflects the
-// current state. The item list's own drag/remove controls are handled via the
-// #itemList.locked CSS rule plus guards in their click/pointerdown handlers.
+function updateProgressUI(active) {
+  var progress = checklistProgress(active);
+  progressCountEl.textContent = progress.answered + ' / ' + progress.total;
+  var pct = progress.total ? Math.round((progress.answered / progress.total) * 100) : 0;
+  progressFillEl.style.width = pct + '%';
+  progressFillEl.setAttribute('aria-valuemax', String(progress.total));
+  progressFillEl.setAttribute('aria-valuenow', String(progress.answered));
+  progressSrEl.textContent = progress.answered + ' of ' + progress.total + ' items answered';
+  var remaining = progress.total - progress.answered;
+  remainingCountEl.textContent = progress.total ? (remaining + (remaining === 1 ? ' item remaining' : ' items remaining')) : '';
+}
+
+// Add-item controls get disabled while the active checklist is locked; the lock
+// toggle button's own label/color reflects the current state. The item list's own
+// drag/menu controls are handled via the #itemList.locked CSS rule plus guards in
+// their click/pointerdown handlers.
 function updateLockUI(active) {
   var locked = !!active.locked;
-  [newItemLabelEl, newItemLabelHeaderEl, addItemBtn, addItemBtnHeader].forEach(function (el) {
-    el.disabled = locked;
-  });
+  newItemLabelEl.disabled = locked;
   typeButtons.forEach(function (b) { b.disabled = locked; });
-  [lockChecklistBtn, lockChecklistBtnHeader].forEach(function (btn) {
-    btn.textContent = locked ? 'Unlock checklist' : 'Lock checklist';
-    btn.classList.toggle('is-locked', locked);
-  });
+  document.querySelector('.add-row').classList.toggle('locked', locked);
+  lockChecklistBtn.textContent = locked ? 'Unlock checklist' : 'Lock checklist';
+  lockChecklistBtn.classList.toggle('is-locked', locked);
 }
 
 function setupSignatureCanvases() {
@@ -469,11 +588,6 @@ collectionTitleInput.addEventListener('input', function () {
   document.title = state.collectionTitle || 'Checklist Collection';
   saveState();
 });
-collectionDescInput.addEventListener('input', function () {
-  state.collectionDescription = collectionDescInput.value;
-  saveState();
-});
-
 checklistTitleInput.addEventListener('input', function () {
   var active = getActive();
   active.title = checklistTitleInput.value;
@@ -524,17 +638,19 @@ tabBarEl.addEventListener('click', function (e) {
 
 itemListEl.addEventListener('click', function (e) {
   var btn = e.target.closest('[data-action]');
-  if (!btn) return;
+  if (!btn) {
+    if (openItemMenuId) { openItemMenuId = null; render(); }
+    return;
+  }
   var id = btn.dataset.id;
   var action = btn.dataset.action;
   var active = getActive();
-  var item = active.items.find(function (i) { return i.id === id; });
+  var items = active.items;
+  var idx = items.findIndex(function (i) { return i.id === id; });
+  var item = idx === -1 ? null : items[idx];
+
   if (action === 'toggle' && item) {
     item.checked = !item.checked;
-    saveState(); render();
-  } else if (action === 'delete') {
-    if (active.locked) return;
-    active.items = active.items.filter(function (i) { return i.id !== id; });
     saveState(); render();
   } else if (action === 'remove-photo' && item) {
     item.photo = null;
@@ -547,8 +663,77 @@ itemListEl.addEventListener('click', function (e) {
     saveState(); render();
   } else if (action === 'photo' && item) {
     addPhotoToItem(item);
+  } else if (action === 'edit-signoff' && item) {
+    signoffEditingIds.add(id);
+    render();
+  } else if (action === 'open-item-menu') {
+    openItemMenuId = openItemMenuId === id ? null : id;
+    itemDeleteArmedId = null;
+    render();
+  } else if (action === 'move-up') {
+    if (active.locked || idx <= 0) return;
+    moveItem(idx, idx - 1);
+    openItemMenuId = null;
+    saveState(); render();
+  } else if (action === 'move-down') {
+    if (active.locked || idx === -1 || idx >= items.length - 1) return;
+    moveItem(idx, idx + 1);
+    openItemMenuId = null;
+    saveState(); render();
+  } else if (action === 'duplicate-item' && item) {
+    if (active.locked) return;
+    items.splice(idx + 1, 0, Object.assign({}, item, { id: uid() }));
+    openItemMenuId = null;
+    saveState(); render();
+  } else if (action === 'delete') {
+    if (active.locked) return;
+    if (itemDeleteArmedId !== id) {
+      itemDeleteArmedId = id;
+      clearTimeout(itemDeleteTimer);
+      itemDeleteTimer = setTimeout(function () { itemDeleteArmedId = null; render(); }, 4000);
+      render();
+      return;
+    }
+    clearTimeout(itemDeleteTimer);
+    itemDeleteArmedId = null;
+    openItemMenuId = null;
+    active.items = active.items.filter(function (i) { return i.id !== id; });
+    saveState(); render();
   }
 });
+
+// Closes an open item-actions popover on any click outside the item list, and
+// collapses a sign-off that just became signed back to its compact "signed" card
+// once the user clicks away from that specific row — never mid-stroke/mid-typing,
+// since a click landing back inside the same <li> (drawing, toggling Draw/Type,
+// clicking Clear) doesn't count as "away". Registered on the CAPTURE phase and
+// deliberately not just delegated through itemListEl's own bubble-phase click
+// handler: that handler calls render(), which replaces #itemList's children —
+// detaching e.target — so a bubble-phase check running afterward would see a
+// detached node whose closest('#itemList') always comes back null, making every
+// click look like it happened outside the list and re-closing what was just opened.
+document.addEventListener('click', function (e) {
+  var needsRender = false;
+  if (openItemMenuId && !e.target.closest('#itemList')) {
+    openItemMenuId = null;
+    clearTimeout(itemDeleteTimer);
+    itemDeleteArmedId = null;
+    needsRender = true;
+  }
+
+  if (signoffEditingIds.size) {
+    var active = getActive();
+    var clickedLi = e.target.closest('.item');
+    var clickedId = clickedLi ? clickedLi.dataset.id : null;
+    signoffEditingIds.forEach(function (id) {
+      if (id === clickedId) return; // still interacting with this item's own row
+      var item = active.items.find(function (i) { return i.id === id; });
+      if (item && isItemAnswered(item)) { signoffEditingIds.delete(id); needsRender = true; }
+    });
+  }
+
+  if (needsRender) render();
+}, true);
 
 itemListEl.addEventListener('input', function (e) {
   var action = e.target.dataset.action;
@@ -665,7 +850,7 @@ function onDragMove(e) {
   var items = getActive().items;
   var fromIndex = items.findIndex(function (i) { return i.id === dragState.id; });
   if (fromIndex === -1) return;
-  var rows = itemListEl.querySelectorAll('.item');
+  var rows = itemListEl.querySelectorAll('.item, .section-head');
   for (var k = 0; k < rows.length; k++) {
     var row = rows[k];
     var overId = row.dataset.id;
@@ -692,26 +877,65 @@ function onDragEnd() {
   render();
 }
 
-itemListEl.addEventListener('pointerdown', function (e) {
-  var handle = e.target.closest('.drag-handle');
-  if (!handle) return;
-  if (getActive().locked) return;
-  var li = handle.closest('.item');
-  if (!li) return;
-  e.preventDefault();
+function startDrag(li) {
+  if (getActive().locked || !li) return;
   dragState = { id: li.dataset.id };
   li.classList.add('dragging');
   document.addEventListener('pointermove', onDragMove);
   document.addEventListener('pointerup', onDragEnd);
   document.addEventListener('pointercancel', onDragEnd);
+}
+
+itemListEl.addEventListener('pointerdown', function (e) {
+  var handle = e.target.closest('.drag-handle');
+  if (!handle) return;
+  var li = handle.closest('.item, .section-head');
+  if (!li) return;
+  e.preventDefault();
+  startDrag(li);
+});
+
+// Touch has no hover-revealed drag handle, so a 400ms press-and-hold anywhere on
+// the row starts the same drag — cancelled by releasing early or by moving the
+// finger more than 8px (a scroll or a tap), so it doesn't hijack normal taps on
+// the checkbox, response controls, or the item menu.
+itemListEl.addEventListener('pointerdown', function (e) {
+  if (e.pointerType !== 'touch') return;
+  if (e.target.closest('.drag-handle, .item-menu-wrap, button, input, textarea, a, .signature-canvas')) return;
+  var li = e.target.closest('.item, .section-head');
+  if (!li || getActive().locked) return;
+  var startX = e.clientX, startY = e.clientY;
+  clearTimeout(longPressTimer);
+  var moved = false;
+  function onMove(ev) {
+    if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) {
+      moved = true;
+      cancel();
+    }
+  }
+  function cancel() {
+    clearTimeout(longPressTimer);
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', cancel);
+    document.removeEventListener('pointercancel', cancel);
+  }
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', cancel);
+  document.addEventListener('pointercancel', cancel);
+  longPressTimer = setTimeout(function () {
+    cancel();
+    if (!moved) startDrag(li);
+  }, 400);
 });
 
 var activeStroke = null;
+var signoffCollapseTimer = null;
 
 itemListEl.addEventListener('pointerdown', function (e) {
   var canvas = e.target.closest('.signature-canvas');
   if (!canvas) return;
   e.preventDefault();
+  clearTimeout(signoffCollapseTimer); // a new stroke means they're still signing
   var ctx = canvas.getContext('2d');
   var rect = canvas.getBoundingClientRect();
   activeStroke = { id: canvas.dataset.id, canvas: canvas, ctx: ctx };
@@ -731,6 +955,10 @@ itemListEl.addEventListener('pointermove', function (e) {
   activeStroke.ctx.stroke();
 });
 
+// A signature can take several separate strokes (dotting an i, crossing a t), so
+// this doesn't collapse to the signed card the instant one stroke ends — that
+// would yank the canvas away mid-signature. Instead it waits a beat for another
+// stroke to start; startSignatureStroke() above cancels this timer when one does.
 function endSignatureStroke() {
   if (!activeStroke) return;
   var canvas = activeStroke.canvas;
@@ -740,23 +968,35 @@ function endSignatureStroke() {
   if (item) {
     try { item.signature = canvas.toDataURL('image/png'); } catch (err) { /* ignore */ }
     saveState();
+    clearTimeout(signoffCollapseTimer);
+    signoffCollapseTimer = setTimeout(function () {
+      var stillActive = getActive().items.find(function (i) { return i.id === id; });
+      if (stillActive && isItemAnswered(stillActive) && !signoffEditingIds.has(id)) render();
+    }, 900);
   }
 }
 itemListEl.addEventListener('pointerup', endSignatureStroke);
 itemListEl.addEventListener('pointercancel', endSignatureStroke);
 
-var newItemLabelHeaderEl = document.getElementById('newItemLabelHeader');
+// The typed-name path has a single clean "done" signal — leaving the field —
+// unlike a multi-stroke signature, so it collapses to the signed card right away.
+itemListEl.addEventListener('focusout', function (e) {
+  if (!e.target.classList.contains('signoff-name-input')) return;
+  var id = e.target.dataset.id;
+  var item = getActive().items.find(function (i) { return i.id === id; });
+  if (item && isItemAnswered(item) && !signoffEditingIds.has(id)) render();
+});
 
 var PLACEHOLDERS = { section: 'Section heading', signoff: 'Sign-off label' };
+var DEFAULT_ADD_PLACEHOLDER = '＋ Add item';
 typeButtons.forEach(function (b) {
   b.addEventListener('click', function () {
     selectedType = b.dataset.type;
     typeButtons.forEach(function (x) { x.classList.toggle('active', x.dataset.type === selectedType); });
-    var placeholder = PLACEHOLDERS[selectedType] || 'New item label';
-    newItemLabelEl.placeholder = placeholder;
-    newItemLabelHeaderEl.placeholder = placeholder;
+    newItemLabelEl.placeholder = PLACEHOLDERS[selectedType] || DEFAULT_ADD_PLACEHOLDER;
   });
 });
+newItemLabelEl.placeholder = DEFAULT_ADD_PLACEHOLDER;
 
 function addItem(labelInputEl) {
   if (getActive().locked) return;
@@ -768,17 +1008,9 @@ function addItem(labelInputEl) {
   saveState(); render();
 }
 
-var addItemBtn = document.getElementById('addItemBtn');
-var addItemBtnHeader = document.getElementById('addItemBtnHeader');
-
-addItemBtn.addEventListener('click', function () { addItem(newItemLabelEl); });
 newItemLabelEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(newItemLabelEl); });
 
-addItemBtnHeader.addEventListener('click', function () { addItem(newItemLabelHeaderEl); });
-newItemLabelHeaderEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(newItemLabelHeaderEl); });
-
 var lockChecklistBtn = document.getElementById('lockChecklistBtn');
-var lockChecklistBtnHeader = document.getElementById('lockChecklistBtnHeader');
 
 function toggleLock() {
   var active = getActive();
@@ -786,7 +1018,6 @@ function toggleLock() {
   saveState(); render();
 }
 lockChecklistBtn.addEventListener('click', toggleLock);
-lockChecklistBtnHeader.addEventListener('click', function () { toggleLock(); closeAllMenus(); });
 
 // Wires up the "click once to arm, click again within 4s to confirm" pattern used for
 // destructive actions elsewhere (tab close, template delete). Each button tracked
@@ -823,7 +1054,6 @@ function wireClearResponsesButton(btn, onConfirmed) {
 }
 
 wireClearResponsesButton(document.getElementById('resetBtn'));
-wireClearResponsesButton(document.getElementById('resetBtnHeader'), function () { closeAllMenus(); });
 
 var themeToggle = document.getElementById('themeToggle');
 function currentTheme() {
@@ -1162,12 +1392,6 @@ async function exportPdfFromButton(btn) {
 var exportBtn = document.getElementById('exportPdfBtn');
 exportBtn.addEventListener('click', function () { exportPdfFromButton(exportBtn); });
 
-var exportBtnHeader = document.getElementById('exportPdfBtnHeader');
-exportBtnHeader.addEventListener('click', function () {
-  closeAllMenus();
-  exportPdfFromButton(exportBtnHeader);
-});
-
 var saveTemplateBtn = document.getElementById('saveTemplateBtn');
 var importTemplateInput = document.getElementById('importTemplateInput');
 var openTemplateLibraryBtn = document.getElementById('openTemplateLibraryBtn');
@@ -1384,6 +1608,59 @@ templateLibraryList.addEventListener('click', async function (e) {
   }
 });
 
+var renameChecklistBtn = document.getElementById('renameChecklistBtn');
+var duplicateChecklistBtn = document.getElementById('duplicateChecklistBtn');
+var deleteChecklistBtn = document.getElementById('deleteChecklistBtn');
+
+renameChecklistBtn.addEventListener('click', function () {
+  closeAllMenus();
+  checklistTitleInput.focus();
+  checklistTitleInput.select();
+});
+
+duplicateChecklistBtn.addEventListener('click', function () {
+  closeAllMenus();
+  var active = getActive();
+  var copy = {
+    id: uid(),
+    title: (active.title || 'Untitled Checklist') + ' Copy',
+    inspector: active.inspector,
+    date: active.date,
+    items: active.items.map(function (item) { return Object.assign({}, item, { id: uid() }); }),
+    locked: false
+  };
+  state.checklists.push(copy);
+  state.activeId = copy.id;
+  saveState(); render();
+});
+
+deleteChecklistBtn.addEventListener('click', function () {
+  if (state.checklists.length <= 1) return;
+  var id = state.activeId;
+  if (!deleteChecklistArmed) {
+    deleteChecklistArmed = true;
+    deleteChecklistBtn.textContent = 'Click again to delete';
+    deleteChecklistBtn.classList.add('confirm-pending');
+    clearTimeout(deleteChecklistTimer);
+    deleteChecklistTimer = setTimeout(function () {
+      deleteChecklistArmed = false;
+      deleteChecklistBtn.textContent = 'Delete checklist';
+      deleteChecklistBtn.classList.remove('confirm-pending');
+    }, 4000);
+    return;
+  }
+  clearTimeout(deleteChecklistTimer);
+  deleteChecklistArmed = false;
+  deleteChecklistBtn.textContent = 'Delete checklist';
+  deleteChecklistBtn.classList.remove('confirm-pending');
+  var idx = state.checklists.findIndex(function (c) { return c.id === id; });
+  state.checklists = state.checklists.filter(function (c) { return c.id !== id; });
+  var nextIdx = Math.min(Math.max(0, idx - 1), state.checklists.length - 1);
+  state.activeId = state.checklists[nextIdx].id;
+  saveState(); render();
+  closeAllMenus();
+});
+
 var menuTriggers = document.querySelectorAll('.menu-trigger');
 
 function closeAllMenus() {
@@ -1415,7 +1692,14 @@ document.querySelectorAll('.menu-dropdown').forEach(function (dd) {
 
 document.addEventListener('click', closeAllMenus);
 document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') closeAllMenus();
+  if (e.key !== 'Escape') return;
+  closeAllMenus();
+  if (openItemMenuId) {
+    openItemMenuId = null;
+    clearTimeout(itemDeleteTimer);
+    itemDeleteArmedId = null;
+    render();
+  }
 });
 
 async function init() {
