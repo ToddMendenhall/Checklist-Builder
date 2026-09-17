@@ -1,0 +1,34 @@
+name: Build Windows desktop installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: "Checklist Collection v__VERSION__"
+          releaseBody: |
+            Desktop installer for Checklist Collection. Download the `.msi` or `.exe` under Assets below and run it.
+
+            Installing this registers the `.checklist` file type with Windows, so exported templates and collections show the Cypressili mark as their icon in File Explorer — including files already on disk from earlier web/mobile exports.
+          releaseDraft: true
+          prerelease: false
