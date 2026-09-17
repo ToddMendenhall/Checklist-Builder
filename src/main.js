@@ -210,11 +210,11 @@ function templatePackToFileText(templateList) {
 }
 
 function templateFilename(template) {
-  return slugifyFilename(template.title, 'checklist_template') + '.json';
+  return slugifyFilename(template.title, 'checklist_template') + '.checklist';
 }
 
 function templatePackFilename() {
-  return slugifyFilename(state.collectionTitle, 'checklist_templates') + '_templates.json';
+  return slugifyFilename(state.collectionTitle, 'checklist_templates') + '_templates.checklist';
 }
 
 function templateFromRaw(raw) {
@@ -262,7 +262,7 @@ function collectionToFileText() {
 }
 
 function collectionFilename() {
-  return slugifyFilename(state.collectionTitle, 'checklist_collection') + '.json';
+  return slugifyFilename(state.collectionTitle, 'checklist_collection') + '.checklist';
 }
 
 function checklistFromRaw(raw) {
@@ -1346,7 +1346,7 @@ async function saveJsonFile(filename, text, dialogFilterName) {
   if (isTauri()) {
     var path = await saveFileDialog({
       defaultPath: filename,
-      filters: [{ name: dialogFilterName, extensions: ['json'] }]
+      filters: [{ name: dialogFilterName, extensions: ['checklist'] }]
     });
     if (!path) return; // user cancelled the dialog
     await writeTauriFile(path, new TextEncoder().encode(text));
@@ -1355,6 +1355,22 @@ async function saveJsonFile(filename, text, dialogFilterName) {
       path: filename, data: text, directory: Directory.Cache, encoding: Encoding.UTF8
     });
     await Share.share({ title: filename, url: written.uri });
+  } else if (typeof window.showSaveFilePicker === 'function') {
+    // Lets the user pick the destination folder instead of always landing in Downloads.
+    var handle;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: dialogFilterName, accept: { 'application/json': ['.checklist'] } }]
+      });
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // user cancelled the picker
+      browserDownload(new Blob([text], { type: 'application/json' }), filename);
+      return;
+    }
+    var writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
   } else {
     browserDownload(new Blob([text], { type: 'application/json' }), filename);
   }
