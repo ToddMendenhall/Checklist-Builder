@@ -65,6 +65,18 @@ To build/preview this variant locally: `npm run build:pages` then `npm run previ
 
 For a packaged native desktop binary (as opposed to the PWA install above), the app is wrapped with [Tauri](https://tauri.app/) — a system-webview shell, so the shipped binary is a few MB rather than an Electron-sized Chromium bundle. Native project files live in `src-tauri/`.
 
+### Getting the Windows installer (no build tools required)
+
+Installing the desktop app (rather than just using the PWA) is what registers `.checklist` files with Windows so they show the Cypressili mark as their file icon in File Explorer — a browser download alone can't do that; only an installed app can.
+
+1. Go to the repo's **[Releases page](https://github.com/ToddMendenhall/Checklist-Builder/releases)**.
+2. Download the `.msi` (or `.exe`) file from the latest release's **Assets**.
+3. Run it and install like any other Windows app.
+
+That's a one-time step per machine — once installed, every `.checklist` file gets the icon, including ones already sitting on disk from earlier web or mobile exports (Explorer keys the icon off the file extension, not off which app produced the file).
+
+New installers are built by [`.github/workflows/build-desktop-windows.yml`](.github/workflows/build-desktop-windows.yml), run manually from the repo's **Actions** tab (`Build Windows desktop installer` → `Run workflow`). It publishes to Releases as a **draft** — someone with write access needs to open the draft release and click **Publish** before the download link above goes live for others.
+
 ```bash
 npm run desktop:dev     # run the desktop app with hot reload
 npm run desktop:build   # produce release binaries/installers for the current OS
