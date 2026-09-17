@@ -18,14 +18,14 @@
 <body>
   <div class="app">
     <nav class="app-menu-bar" aria-label="Application menu">
-      <img class="menu-bar-logo" src="/assets/Cypress_Logo.png" alt="Cypressili">
+      <img class="menu-bar-logo" src="/assets/cypress-mark.svg" alt="Cypressili">
       <span class="menu-bar-divider"></span>
       <div class="menu-item">
         <button class="menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">Collection</button>
         <div class="menu-dropdown" role="menu" hidden>
           <button id="exportCollectionBtn" class="menu-dropdown-item" type="button" role="menuitem">Export collection…</button>
           <label class="menu-dropdown-item" role="menuitem">Import collection…
-            <input id="importCollectionInput" type="file" accept="application/json,.json" hidden>
+            <input id="importCollectionInput" type="file" accept="application/json,.json,.checklist" hidden>
           </label>
         </div>
       </div>
@@ -35,7 +35,7 @@
           <button id="openTemplateLibraryBtn" class="menu-dropdown-item" type="button" role="menuitem">Template library</button>
           <button id="saveTemplateBtn" class="menu-dropdown-item" type="button" role="menuitem">Save as template</button>
           <label class="menu-dropdown-item" role="menuitem">Import template…
-            <input id="importTemplateInput" type="file" accept="application/json,.json" hidden>
+            <input id="importTemplateInput" type="file" accept="application/json,.json,.checklist" hidden>
           </label>
         </div>
       </div>

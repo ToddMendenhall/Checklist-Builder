@@ -37,6 +37,15 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["checklist"],
+        "name": "Checklist Collection File",
+        "description": "Checklist Collection template or collection file",
+        "role": "Editor",
+        "mimeType": "application/x-checklist-collection"
+      }
+    ]
   }
 }
