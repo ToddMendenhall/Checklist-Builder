@@ -405,7 +405,7 @@
     margin: 28px 0 4px;
     padding: 0;
   }
-  .item-list > .section-head:first-child { margin-top: 0; }
+  .item-list > .section-head:first-child { margin-top: 20px; }
   .section-label {
     font-family: 'Source Serif 4', 'Arno Pro', Georgia, serif;
     font-weight: 700;
