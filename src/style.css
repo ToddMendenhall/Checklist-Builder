@@ -418,6 +418,25 @@
     :root:not([data-theme="light"]) .section-label { color: var(--ink); }
   }
   :root[data-theme="dark"] .section-label { color: var(--ink); }
+  .section-label-input {
+    font-family: 'Source Serif 4', 'Arno Pro', Georgia, serif;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--navy);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--primary);
+    padding: 0 0 2px;
+    width: 240px;
+    max-width: 60%;
+  }
+  .section-label-input:focus { outline: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .section-label-input { color: var(--ink); }
+  }
+  :root[data-theme="dark"] .section-label-input { color: var(--ink); }
   .section-rule { flex: 1; height: 1px; background: var(--line-strong); }
   .section-count { font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--ink-soft); white-space: nowrap; }
 
@@ -464,6 +483,20 @@
   .item-body { flex: 1; min-width: 0; }
   .item-label { font-family: 'Source Sans 3', sans-serif; font-size: 1.0625rem; line-height: 1.45; color: var(--ink); word-break: break-word; }
   @media (max-width: 559px) { .item-label { font-size: 1rem; } }
+  .item-label-input {
+    display: block;
+    width: 100%;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 1.0625rem;
+    line-height: 1.45;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--primary);
+    padding: 0 0 2px;
+  }
+  .item-label-input:focus { outline: none; }
+  @media (max-width: 559px) { .item-label-input { font-size: 1rem; } }
   .item-meta {
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 500;
