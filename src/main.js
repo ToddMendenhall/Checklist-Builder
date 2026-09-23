@@ -325,6 +325,11 @@ var itemDeleteTimer = null;
 var deleteChecklistArmed = false;
 var deleteChecklistTimer = null;
 var openItemMenuId = null;
+// The item (or section) currently showing its label as an editable input instead
+// of static text, plus the label it had when editing began — restored if the
+// field is left empty, so a rename never leaves an item with a blank name.
+var itemRenamingId = null;
+var itemRenameOriginal = '';
 // Sign-off items show a compact "signed" card once they carry a valid signature,
 // instead of the draw/type editing UI — this set tracks which signed items the
 // user has explicitly reopened for editing (via the card's "Edit" link), so
@@ -359,6 +364,7 @@ function itemMenuHtml(item, idx, itemsLen) {
     '<div class="item-menu-wrap">' +
       '<button type="button" class="item-menu" data-action="open-item-menu" data-id="' + item.id + '" aria-label="Item actions" aria-haspopup="true" aria-expanded="' + open + '">⋮</button>' +
       '<div class="item-popover" role="menu"' + (open ? '' : ' hidden') + '>' +
+        '<button type="button" role="menuitem" data-action="rename" data-id="' + item.id + '">Rename</button>' +
         '<button type="button" role="menuitem" data-action="move-up" data-id="' + item.id + '"' + (idx === 0 ? ' disabled' : '') + '>Move up</button>' +
         '<button type="button" role="menuitem" data-action="move-down" data-id="' + item.id + '"' + (idx === itemsLen - 1 ? ' disabled' : '') + '>Move down</button>' +
         '<button type="button" role="menuitem" data-action="duplicate-item" data-id="' + item.id + '">Duplicate</button>' +
@@ -371,9 +377,12 @@ function itemMenuHtml(item, idx, itemsLen) {
 }
 
 function sectionTemplate(item, idx, itemsLen, sectionCount) {
+  var labelHtml = itemRenamingId === item.id
+    ? '<input type="text" class="section-label-input rename-input" data-action="rename-input" data-id="' + item.id + '" value="' + escapeHtml(item.label) + '">'
+    : '<span class="section-label">' + escapeHtml(item.label) + '</span>';
   return (
     '<li class="section-head" data-id="' + item.id + '" role="presentation">' +
-      '<span class="section-label">' + escapeHtml(item.label) + '</span>' +
+      labelHtml +
       '<span class="section-rule"></span>' +
       '<span class="section-count">' + sectionCount + (sectionCount === 1 ? ' item' : ' items') + '</span>' +
       '<span class="drag-handle" title="Drag to reorder">' + GRIP_SVG + '</span>' +
@@ -461,11 +470,14 @@ function itemTemplate(item, num, idx, itemsLen) {
   }
 
   var bodyToggleAttrs = item.type === 'checkbox' ? ' data-action="toggle" data-id="' + item.id + '"' : '';
+  var labelHtml = itemRenamingId === item.id
+    ? '<input type="text" class="item-label-input rename-input" id="item-label-' + item.id + '" data-action="rename-input" data-id="' + item.id + '" value="' + escapeHtml(item.label) + '">'
+    : '<div class="item-label" id="item-label-' + item.id + '">' + escapeHtml(item.label) + '</div>';
   return (
     '<li class="item" data-id="' + item.id + '" data-type="' + item.type + '">' +
     toggleHtml +
     '<div class="item-body"' + bodyToggleAttrs + '>' +
-      '<div class="item-label" id="item-label-' + item.id + '">' + escapeHtml(item.label) + '</div>' +
+      labelHtml +
       '<div class="item-meta">' + metaLabel + '</div>' +
       responseHtml +
     '</div>' +
@@ -670,6 +682,14 @@ itemListEl.addEventListener('click', function (e) {
     openItemMenuId = openItemMenuId === id ? null : id;
     itemDeleteArmedId = null;
     render();
+  } else if (action === 'rename' && item) {
+    if (active.locked) return;
+    itemRenamingId = id;
+    itemRenameOriginal = item.label;
+    openItemMenuId = null;
+    render();
+    var input = itemListEl.querySelector('.rename-input[data-id="' + id + '"]');
+    if (input) { input.focus(); input.select(); }
   } else if (action === 'move-up') {
     if (active.locked || idx <= 0) return;
     moveItem(idx, idx - 1);
@@ -743,6 +763,7 @@ itemListEl.addEventListener('input', function (e) {
   if (action === 'text') { item.text = e.target.value; saveState(); }
   else if (action === 'signoff-name') { item.name = e.target.value; saveState(); }
   else if (action === 'signoff-date') { item.date = e.target.value; saveState(); }
+  else if (action === 'rename-input') { item.label = e.target.value; saveState(); }
 });
 
 var photoFileInput = document.getElementById('photoFileInput');
@@ -985,6 +1006,36 @@ itemListEl.addEventListener('focusout', function (e) {
   var id = e.target.dataset.id;
   var item = getActive().items.find(function (i) { return i.id === id; });
   if (item && isItemAnswered(item) && !signoffEditingIds.has(id)) render();
+});
+
+// Leaving the rename field ends editing — a blank name reverts to whatever the
+// item was called before this edit started, so a rename never leaves an item
+// with an empty label.
+itemListEl.addEventListener('focusout', function (e) {
+  if (!e.target.classList.contains('rename-input')) return;
+  var id = e.target.dataset.id;
+  if (itemRenamingId !== id) return;
+  var item = getActive().items.find(function (i) { return i.id === id; });
+  if (item) {
+    var trimmed = item.label.trim();
+    item.label = trimmed || itemRenameOriginal;
+    saveState();
+  }
+  itemRenamingId = null;
+  render();
+});
+
+itemListEl.addEventListener('keydown', function (e) {
+  if (!e.target.classList.contains('rename-input')) return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    e.target.blur();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    var item = getActive().items.find(function (i) { return i.id === e.target.dataset.id; });
+    if (item) item.label = itemRenameOriginal;
+    e.target.blur();
+  }
 });
 
 var PLACEHOLDERS = { section: 'Section heading', signoff: 'Sign-off label' };
