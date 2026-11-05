@@ -41,6 +41,7 @@ function defaultResponseFields(type) {
   if (type === 'checkbox') return { checked: false };
   if (type === 'text') return { text: '' };
   if (type === 'photo') return { photos: [] };
+  if (type === 'section') return { collapsed: false };
   if (type === 'signoff') {
     var supportsTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     return { mode: supportsTouch ? 'draw' : 'type', signature: null, name: '', date: '' };
@@ -365,6 +366,7 @@ var itemRenameOriginal = '';
 var signoffEditingIds = new Set();
 var GRIP_SVG = '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="6" cy="4" r="1.6"/><circle cx="14" cy="4" r="1.6"/><circle cx="6" cy="10" r="1.6"/><circle cx="14" cy="10" r="1.6"/><circle cx="6" cy="16" r="1.6"/><circle cx="14" cy="16" r="1.6"/></svg>';
 var LOCK_SVG = '<svg viewBox="0 0 20 20" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 9V6.5a4 4 0 0 1 8 0V9"/><rect x="4.5" y="9" width="11" height="8" rx="1.6" fill="currentColor" stroke="none"/></svg>';
+var CHEVRON_SVG = '<svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8 L10 12.5 L14 8"/></svg>';
 
 // An item "answers" when it carries a real response; sections never count toward
 // either side of the fraction. Used for the tab/header/action-bar completion counts.
@@ -408,8 +410,11 @@ function sectionTemplate(item, idx, itemsLen, sectionCount) {
   var labelHtml = itemRenamingId === item.id
     ? '<input type="text" class="section-label-input rename-input" data-action="rename-input" data-id="' + item.id + '" value="' + escapeHtml(item.label) + '">'
     : '<span class="section-label">' + escapeHtml(item.label) + '</span>';
+  var collapsed = !!item.collapsed;
   return (
-    '<li class="section-head" data-id="' + item.id + '" role="presentation">' +
+    '<li class="section-head' + (collapsed ? ' collapsed' : '') + '" data-id="' + item.id + '" role="presentation">' +
+      '<button type="button" class="section-collapse-toggle" data-action="toggle-section" data-id="' + item.id + '" ' +
+      'aria-expanded="' + !collapsed + '" aria-label="' + (collapsed ? 'Expand section' : 'Collapse section') + '">' + CHEVRON_SVG + '</button>' +
       labelHtml +
       '<span class="section-rule"></span>' +
       '<span class="section-count">' + sectionCount + (sectionCount === 1 ? ' item' : ' items') + '</span>' +
@@ -555,13 +560,19 @@ function render() {
     itemListEl.innerHTML = '<li class="empty-note">No items yet — add one below.</li>';
   } else {
     var counter = 0;
+    var collapsedSection = false;
     itemListEl.innerHTML = items.map(function (item, idx) {
       if (item.type === 'section') {
         var sectionCount = 0;
         for (var j = idx + 1; j < items.length && items[j].type !== 'section'; j++) sectionCount++;
+        collapsedSection = !!item.collapsed;
         return sectionTemplate(item, idx, items.length, sectionCount);
       }
       counter++;
+      // Item numbers (01, 02, ...) keep counting through a collapsed section's
+      // hidden items so they stay stable — and match the PDF export's numbering
+      // — whether or not the section happens to be collapsed right now.
+      if (collapsedSection) return '';
       return itemTemplate(item, counter, idx, items.length);
     }).join('');
   }
@@ -691,6 +702,9 @@ itemListEl.addEventListener('click', function (e) {
 
   if (action === 'toggle' && item) {
     item.checked = !item.checked;
+    saveState(); render();
+  } else if (action === 'toggle-section' && item) {
+    item.collapsed = !item.collapsed;
     saveState(); render();
   } else if (action === 'remove-photo' && item) {
     item.photos.splice(Number(btn.dataset.photoIdx), 1);
