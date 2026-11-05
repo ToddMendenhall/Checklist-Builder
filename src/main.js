@@ -40,12 +40,22 @@ function tabColorVarForId(id) {
 function defaultResponseFields(type) {
   if (type === 'checkbox') return { checked: false };
   if (type === 'text') return { text: '' };
-  if (type === 'photo') return { photo: null };
+  if (type === 'photo') return { photos: [] };
   if (type === 'signoff') {
     var supportsTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     return { mode: supportsTouch ? 'draw' : 'type', signature: null, name: '', date: '' };
   }
   return {};
+}
+
+// A shallow copy would leave a duplicated item's `photos` array pointing at
+// the same array as the original — fine as long as it's only ever replaced,
+// but it's mutated in place (push/splice) when photos are added or removed,
+// so the duplicate would silently edit the original's photos too.
+function cloneItem(item) {
+  var copy = Object.assign({}, item, { id: uid() });
+  if (copy.photos) copy.photos = copy.photos.slice();
+  return copy;
 }
 
 function escapeHtml(s) {
@@ -76,7 +86,7 @@ function defaultState() {
       { id: uid(), label: 'Fire extinguisher present and charged', type: 'checkbox', checked: false },
       { id: uid(), label: 'Note any visible damage', type: 'text', text: '' },
       { id: uid(), label: 'Documentation', type: 'section' },
-      { id: uid(), label: 'Photo of panel nameplate', type: 'photo', photo: null }
+      { id: uid(), label: 'Photo of panel nameplate', type: 'photo', photos: [] }
     ]
   });
   return {
@@ -87,12 +97,30 @@ function defaultState() {
   };
 }
 
+// Photo items used to carry a single `photo` object; normalize any item saved
+// or imported before multi-photo support to the `photos` array it now
+// expects. Mutates and returns the item for convenient use in forEach/map.
+function normalizePhotoItem(item) {
+  if (item.type === 'photo' && !Array.isArray(item.photos)) {
+    item.photos = item.photo ? [item.photo] : [];
+    delete item.photo;
+  }
+  return item;
+}
+
+function migratePhotoItems(parsed) {
+  parsed.checklists.forEach(function (checklist) {
+    checklist.items.forEach(normalizePhotoItem);
+  });
+  return parsed;
+}
+
 async function loadState() {
   try {
     var raw = (await Preferences.get({ key: STORAGE_KEY })).value;
     if (raw) {
       var parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.checklists) && parsed.checklists.length) return parsed;
+      if (parsed && Array.isArray(parsed.checklists) && parsed.checklists.length) return migratePhotoItems(parsed);
     }
   } catch (e) { /* storage unavailable or corrupt — fall through */ }
   return defaultState();
@@ -273,7 +301,7 @@ function checklistFromRaw(raw) {
     date: (raw && raw.date && String(raw.date)) || '',
     items: (raw && Array.isArray(raw.items) ? raw.items : [])
       .filter(function (item) { return item && typeof item.label === 'string' && typeof item.type === 'string'; })
-      .map(function (item) { return Object.assign({}, item, { id: uid() }); }),
+      .map(function (item) { return normalizePhotoItem(Object.assign({}, item, { id: uid() })); }),
     locked: !!(raw && raw.locked)
   };
 }
@@ -343,7 +371,7 @@ var LOCK_SVG = '<svg viewBox="0 0 20 20" width="11" height="11" aria-hidden="tru
 function isItemAnswered(item) {
   if (item.type === 'checkbox') return !!item.checked;
   if (item.type === 'text') return !!(item.text && item.text.trim());
-  if (item.type === 'photo') return !!item.photo;
+  if (item.type === 'photo') return !!(item.photos && item.photos.length);
   if (item.type === 'signoff') {
     return (item.mode !== 'type' && !!item.signature) || (item.mode === 'type' && !!(item.name && item.name.trim()));
   }
@@ -420,18 +448,18 @@ function itemTemplate(item, num, idx, itemsLen) {
       'value="' + escapeHtml(item.text || '') + '" placeholder="Response">' +
       '</div>';
   } else if (item.type === 'photo') {
-    if (item.photo) {
-      responseHtml =
-        '<div class="item-response"><div class="photo-row"><div class="photo-wrap">' +
-        '<img src="' + item.photo.dataUrl + '" class="photo-thumb" alt="Attached photo">' +
-        '<button type="button" class="photo-remove" data-action="remove-photo" data-id="' + item.id + '" aria-label="Remove photo">×</button>' +
-        '</div></div></div>';
-    } else {
-      responseHtml =
-        '<div class="item-response"><div class="photo-row">' +
-        '<button type="button" class="photo-btn" data-action="photo" data-id="' + item.id + '">＋ Add photo</button>' +
-        '</div></div>';
-    }
+    var photos = item.photos || [];
+    responseHtml =
+      '<div class="item-response"><div class="photo-row">' +
+      photos.map(function (photo, photoIdx) {
+        return '<div class="photo-wrap">' +
+          '<img src="' + photo.dataUrl + '" class="photo-thumb" alt="Attached photo">' +
+          '<button type="button" class="photo-remove" data-action="remove-photo" data-id="' + item.id + '" ' +
+          'data-photo-idx="' + photoIdx + '" aria-label="Remove photo">×</button>' +
+          '</div>';
+      }).join('') +
+      '<button type="button" class="photo-btn" data-action="photo" data-id="' + item.id + '">＋ Add photo</button>' +
+      '</div></div>';
   } else if (item.type === 'signoff') {
     var isSigned = answered;
     var showEditing = !isSigned || signoffEditingIds.has(item.id);
@@ -665,7 +693,7 @@ itemListEl.addEventListener('click', function (e) {
     item.checked = !item.checked;
     saveState(); render();
   } else if (action === 'remove-photo' && item) {
-    item.photo = null;
+    item.photos.splice(Number(btn.dataset.photoIdx), 1);
     saveState(); render();
   } else if (action === 'mode' && item) {
     item.mode = btn.dataset.mode;
@@ -702,7 +730,7 @@ itemListEl.addEventListener('click', function (e) {
     saveState(); render();
   } else if (action === 'duplicate-item' && item) {
     if (active.locked) return;
-    items.splice(idx + 1, 0, Object.assign({}, item, { id: uid() }));
+    items.splice(idx + 1, 0, cloneItem(item));
     openItemMenuId = null;
     saveState(); render();
   } else if (action === 'delete') {
@@ -805,7 +833,7 @@ async function capturePhotoNative(id) {
   var active = getActive();
   var item = active.items.find(function (i) { return i.id === id; });
   if (!item) return;
-  item.photo = { dataUrl: photo.dataUrl, width: dims.width, height: dims.height };
+  item.photos.push({ dataUrl: photo.dataUrl, width: dims.width, height: dims.height });
   saveState(); render();
 }
 
@@ -843,17 +871,17 @@ function resizePhotoFile(file) {
 }
 
 photoFileInput.addEventListener('change', async function () {
-  var file = photoFileInput.files && photoFileInput.files[0];
+  var files = photoFileInput.files ? Array.prototype.slice.call(photoFileInput.files) : [];
   var id = pendingPhotoItemId;
   photoFileInput.value = '';
   pendingPhotoItemId = null;
-  if (!file || !id) return;
+  if (!files.length || !id) return;
   try {
-    var photo = await resizePhotoFile(file);
+    var photos = await Promise.all(files.map(resizePhotoFile));
     var active = getActive();
     var item = active.items.find(function (i) { return i.id === id; });
     if (!item) return;
-    item.photo = photo;
+    item.photos.push.apply(item.photos, photos);
     saveState(); render();
   } catch (e) {
     alert(e && e.message ? e.message : 'Could not read that photo.');
@@ -1096,7 +1124,7 @@ function wireClearResponsesButton(btn, onConfirmed) {
     getActive().items.forEach(function (i) {
       if (i.type === 'checkbox') i.checked = false;
       if (i.type === 'text') i.text = '';
-      if (i.type === 'photo') i.photo = null;
+      if (i.type === 'photo') i.photos = [];
       if (i.type === 'signoff') { i.signature = null; i.name = ''; i.date = ''; }
     });
     saveState(); render();
@@ -1282,17 +1310,32 @@ async function buildPdfBlob() {
       doc.text(respLines, labelX, y);
       doc.setTextColor(20, 20, 20);
       y += respLines.length * 12 + 10;
-    } else if (item.type === 'photo' && item.photo) {
-      var maxImgWidth = 160;
-      var ratio = item.photo.height / item.photo.width;
-      var imgW = Math.min(maxImgWidth, maxWidth - 24);
-      var imgH = imgW * ratio;
-      ensureSpace(imgH + 10);
-      try {
-        doc.addImage(item.photo.dataUrl, imageFormatFromDataUrl(item.photo.dataUrl), labelX, y, imgW, imgH);
-      } catch (e) { /* skip image if it can't be embedded */ }
-      y += imgH + 14;
-    } else if (item.type === 'photo' && !item.photo) {
+    } else if (item.type === 'photo' && item.photos && item.photos.length) {
+      // Multiple photos lay out as a grid (up to 3 per row, each scaled to a
+      // shared thumbnail width) rather than one full-width image per photo —
+      // otherwise a handful of photos on one item could each claim most of a
+      // page. ensureSpace runs per row, not per item, so a row can still break
+      // cleanly to a new page without splitting an image across the break.
+      var thumbW = Math.min(150, (maxWidth - 24 - 24) / 3);
+      var thumbGap = 12;
+      var cols = 3;
+      for (var p = 0; p < item.photos.length; p += cols) {
+        var row = item.photos.slice(p, p + cols);
+        var rowH = row.reduce(function (max, photo) {
+          return Math.max(max, thumbW * (photo.height / photo.width));
+        }, 0);
+        ensureSpace(rowH + 10);
+        row.forEach(function (photo, col) {
+          var px = labelX + col * (thumbW + thumbGap);
+          var ph = thumbW * (photo.height / photo.width);
+          try {
+            doc.addImage(photo.dataUrl, imageFormatFromDataUrl(photo.dataUrl), px, y, thumbW, ph);
+          } catch (e) { /* skip image if it can't be embedded */ }
+        });
+        y += rowH + 10;
+      }
+      y += 4;
+    } else if (item.type === 'photo' && (!item.photos || !item.photos.length)) {
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(10);
       doc.setTextColor(138, 146, 155);
@@ -1693,7 +1736,7 @@ duplicateChecklistBtn.addEventListener('click', function () {
     title: (active.title || 'Untitled Checklist') + ' Copy',
     inspector: active.inspector,
     date: active.date,
-    items: active.items.map(function (item) { return Object.assign({}, item, { id: uid() }); }),
+    items: active.items.map(cloneItem),
     locked: false
   };
   state.checklists.push(copy);
