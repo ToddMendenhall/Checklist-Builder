@@ -1742,6 +1742,9 @@ menuTriggers.forEach(function (trigger) {
     var wasOpen = !panel.hidden;
     closeAllMenus();
     if (!wasOpen) {
+      var rect = trigger.getBoundingClientRect();
+      panel.style.top = (rect.bottom + 6) + 'px';
+      panel.style.left = rect.left + 'px';
       panel.hidden = false;
       trigger.setAttribute('aria-expanded', 'true');
     }
@@ -1768,6 +1771,12 @@ document.addEventListener('keydown', function (e) {
     render();
   }
 });
+
+// The menu bar scrolls horizontally at narrow widths; since the dropdown is
+// fixed-positioned (set from the trigger's rect at open time, not tracked
+// afterward), scrolling the bar would leave it hanging over the wrong
+// trigger, so close it instead.
+document.querySelector('.app-menu-bar').addEventListener('scroll', closeAllMenus);
 
 async function init() {
   state = await loadState();
