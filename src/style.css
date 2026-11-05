@@ -156,10 +156,14 @@
   }
   .theme-toggle:hover { border-color: var(--chrome-ink-soft); color: var(--chrome-ink); }
 
+  /* Fixed rather than absolute: at the narrow breakpoint below, the menu bar
+     itself scrolls horizontally, and an ancestor with overflow-x set also
+     computes overflow-y as auto (per spec, a lone visible axis isn't allowed),
+     which would clip an absolutely-positioned dropdown hanging below the bar.
+     Fixed positioning escapes that clipping; JS sets top/left from the
+     trigger's own position when the menu opens. */
   .menu-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
+    position: fixed;
     min-width: 220px;
     display: flex;
     flex-direction: column;
@@ -169,7 +173,6 @@
     border-radius: var(--radius-md);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
     padding: 6px;
-    margin-top: 6px;
     z-index: 50;
   }
   .menu-dropdown[hidden] { display: none; }
