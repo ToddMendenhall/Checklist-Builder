@@ -668,12 +668,17 @@
     cursor: pointer;
   }
 
-  /* hazard matrix */
-  .hazard-matrix { width: 100%; max-width: 640px; }
+  /* hazard matrix — one job step can list several hazard/control pairs, so
+     each step is a row with the step field on the left and a stack of
+     hazard/control entries on the right; flex's default stretch makes the
+     step column visually span the full height of however many entries it
+     has, without needing real table rowspan. No max-width: these fields
+     typically hold a lot of text, so the matrix fills whatever width the
+     item row has. */
+  .hazard-matrix { width: 100%; }
   .hazard-matrix-head {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 22px;
-    gap: 8px;
+    display: flex;
+    gap: 10px;
     padding: 0 0 4px;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.6875rem;
@@ -681,16 +686,31 @@
     text-transform: uppercase;
     color: var(--ink-soft);
   }
-  .hazard-matrix-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 22px;
-    gap: 8px;
-    align-items: start;
-    margin-bottom: 8px;
+  .hazard-col-step { flex: 0 0 200px; }
+  .hazard-col-hazard, .hazard-col-control { flex: 1; min-width: 0; }
+  .hazard-step {
+    display: flex;
+    gap: 10px;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--line);
   }
-  .hazard-matrix-row .hazard-row-remove { margin-top: 8px; }
+  .hazard-step-label { flex: 0 0 200px; position: relative; display: flex; align-items: center; }
+  .hazard-step-label .hazard-field { width: 100%; }
+  .hazard-step-remove {
+    position: absolute; top: -8px; right: -8px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    font-size: 0.85rem; line-height: 1;
+    cursor: pointer;
+  }
+  .hazard-entries { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .hazard-entry { display: flex; gap: 8px; align-items: start; }
+  .hazard-entry .hazard-field { flex: 1; min-width: 0; }
   .hazard-field {
-    width: 100%;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.86rem;
     line-height: 1.4;
@@ -704,8 +724,8 @@
   }
   .hazard-field::placeholder { color: var(--ink-soft); }
   .hazard-field:focus { outline: none; border-color: var(--line-strong); }
-  .hazard-row-remove {
-    width: 22px; height: 22px;
+  .hazard-entry-remove, .hazard-entry-remove-spacer { flex-shrink: 0; width: 22px; height: 22px; }
+  .hazard-entry-remove {
     border-radius: 50%;
     background: transparent;
     color: var(--ink-soft);
@@ -713,8 +733,8 @@
     font-size: 0.9rem;
     cursor: pointer;
   }
-  .hazard-row-remove:hover { color: var(--accent); }
-  .hazard-add-row {
+  .hazard-entry-remove:hover { color: var(--accent); }
+  .hazard-add-entry, .hazard-add-step {
     display: inline-block;
     font-family: 'Source Sans 3', sans-serif;
     font-size: 0.8rem;
@@ -725,16 +745,15 @@
     padding: 7px 12px;
     cursor: pointer;
   }
-  .hazard-add-row:hover { color: var(--primary); border-color: var(--primary); }
+  .hazard-add-entry:hover, .hazard-add-step:hover { color: var(--primary); border-color: var(--primary); }
+  .hazard-add-entry { align-self: flex-start; }
   @media (max-width: 559px) {
     .hazard-matrix-head { display: none; }
-    .hazard-matrix-row {
-      grid-template-columns: 1fr;
-      gap: 6px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--line);
-    }
-    .hazard-row-remove { justify-self: end; width: auto; padding: 2px 8px; border-radius: var(--radius-sm); }
+    .hazard-step { flex-direction: column; gap: 10px; }
+    .hazard-step-label { flex-basis: auto; }
+    .hazard-entry { flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    .hazard-entry-remove { align-self: flex-end; width: auto; padding: 2px 8px; border-radius: var(--radius-sm); }
+    .hazard-entry-remove-spacer { display: none; }
   }
 
   /* PPE */
