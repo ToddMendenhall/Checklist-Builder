@@ -91,6 +91,7 @@ function newChecklist(seed) {
   return {
     id: uid(),
     title: (seed && seed.title) || 'Untitled Checklist',
+    projectId: '',
     inspector: '',
     date: '',
     items: (seed && seed.items) || [],
@@ -336,7 +337,7 @@ function collectionToFileText() {
       collectionTitle: state.collectionTitle,
       collectionDescription: state.collectionDescription,
       checklists: state.checklists.map(function (c) {
-        return { title: c.title, inspector: c.inspector, date: c.date, items: c.items, locked: !!c.locked };
+        return { title: c.title, projectId: c.projectId, inspector: c.inspector, date: c.date, items: c.items, locked: !!c.locked };
       })
     }
   }, null, 2);
@@ -350,6 +351,7 @@ function checklistFromRaw(raw) {
   return {
     id: uid(),
     title: (raw && raw.title && String(raw.title)) || 'Untitled Checklist',
+    projectId: (raw && raw.projectId && String(raw.projectId)) || '',
     inspector: (raw && raw.inspector && String(raw.inspector)) || '',
     date: (raw && raw.date && String(raw.date)) || '',
     items: (raw && Array.isArray(raw.items) ? raw.items : [])
@@ -387,6 +389,7 @@ var itemListEl = document.getElementById('itemList');
 var tabBarEl = document.getElementById('tabBar');
 var collectionTitleInput = document.getElementById('collectionTitleInput');
 var checklistTitleInput = document.getElementById('checklistTitleInput');
+var projectIdInput = document.getElementById('projectIdInput');
 var inspectorInput = document.getElementById('inspectorInput');
 var dateInput = document.getElementById('dateInput');
 var newItemLabelEl = document.getElementById('newItemLabel');
@@ -681,6 +684,7 @@ function render() {
 
   var active = getActive();
   checklistTitleInput.value = active.title;
+  projectIdInput.value = active.projectId || '';
   inspectorInput.value = active.inspector;
   dateInput.value = active.date;
 
@@ -780,6 +784,7 @@ checklistTitleInput.addEventListener('input', function () {
   var tabLabel = tabBarEl.querySelector('.tab-label[data-id="' + active.id + '"]');
   if (tabLabel) tabLabel.textContent = active.title || 'Untitled Checklist';
 });
+projectIdInput.addEventListener('input', function () { getActive().projectId = projectIdInput.value; saveState(); });
 inspectorInput.addEventListener('input', function () { getActive().inspector = inspectorInput.value; saveState(); });
 dateInput.addEventListener('input', function () { getActive().date = dateInput.value; saveState(); });
 
@@ -1401,7 +1406,11 @@ function loadPdfLogo() {
         } catch (e) { resolve(null); }
       };
       img.onerror = function () { resolve(null); };
-      img.src = '/assets/logo-light.png';
+      // A root-relative string literal like '/assets/...' isn't something Vite's
+      // base-path rewriting can see (unlike a static <img src> in index.html), so
+      // it 404s once this is deployed under a subpath (e.g. GitHub Pages' /Checklist-Builder/) —
+      // BASE_URL is the one Vite does substitute for exactly this case.
+      img.src = import.meta.env.BASE_URL + 'assets/logo-light.png';
     });
   }
   return logoDataPromise;
@@ -1454,6 +1463,7 @@ async function buildPdfBlob() {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
   var metaParts = [];
+  if (active.projectId) metaParts.push('Project ID: ' + active.projectId);
   if (active.inspector) metaParts.push('Inspector: ' + active.inspector);
   if (active.date) metaParts.push('Date: ' + active.date);
   metaParts.push('Generated: ' + new Date().toLocaleString());
@@ -2007,6 +2017,7 @@ duplicateChecklistBtn.addEventListener('click', function () {
   var copy = {
     id: uid(),
     title: (active.title || 'Untitled Checklist') + ' Copy',
+    projectId: active.projectId,
     inspector: active.inspector,
     date: active.date,
     items: active.items.map(cloneItem),
