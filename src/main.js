@@ -539,8 +539,8 @@ function itemTemplate(item, num, idx, itemsLen) {
           var entries = step.entries || [];
           return '<div class="hazard-step" data-step-id="' + step.id + '">' +
             '<div class="hazard-step-label">' +
-              '<textarea class="hazard-field" data-action="hazard-step-field" data-id="' + item.id + '" data-step-id="' + step.id + '" rows="1" placeholder="Job step / activity">' + escapeHtml(step.step || '') + '</textarea>' +
               '<button type="button" class="hazard-step-remove" data-action="remove-hazard-step" data-id="' + item.id + '" data-step-id="' + step.id + '" aria-label="Remove job step">×</button>' +
+              '<textarea class="hazard-field" data-action="hazard-step-field" data-id="' + item.id + '" data-step-id="' + step.id + '" rows="1" placeholder="Job step / activity">' + escapeHtml(step.step || '') + '</textarea>' +
             '</div>' +
             '<div class="hazard-entries">' +
               entries.map(function (entry) {
