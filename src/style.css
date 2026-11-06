@@ -616,11 +616,14 @@
     max-width: 460px;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.94rem;
+    line-height: 1.4;
     color: var(--ink);
     background: var(--surface-field);
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     padding: 11px 12px;
+    resize: none;
+    overflow: hidden;
   }
   .response-text::placeholder { color: var(--ink-soft); }
   .response-text:not(:placeholder-shown) { border-bottom: 2px solid var(--primary); }
@@ -682,18 +685,22 @@
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 22px;
     gap: 8px;
-    align-items: center;
+    align-items: start;
     margin-bottom: 8px;
   }
+  .hazard-matrix-row .hazard-row-remove { margin-top: 8px; }
   .hazard-field {
     width: 100%;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.86rem;
+    line-height: 1.4;
     color: var(--ink);
     background: var(--surface-field);
     border: 1px solid var(--line);
     border-radius: var(--radius-sm);
     padding: 8px 10px;
+    resize: none;
+    overflow: hidden;
   }
   .hazard-field::placeholder { color: var(--ink-soft); }
   .hazard-field:focus { outline: none; border-color: var(--line-strong); }
@@ -766,6 +773,17 @@
   }
   .ppe-option.checked .ppe-option-check { border-color: var(--good); }
   .ppe-option.checked .ppe-option-check .check-mark { stroke-dashoffset: 0; }
+  .ppe-option-wrap { position: relative; display: inline-flex; }
+  .ppe-custom-remove {
+    position: absolute; top: -6px; right: -6px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    font-size: 0.75rem; line-height: 1;
+    cursor: pointer;
+  }
   .ppe-other-input {
     display: block;
     width: 100%;
@@ -901,7 +919,9 @@
   #newItemLabel:disabled { opacity: 0.6; }
   .add-row-spacer { flex: 1; min-width: 0; }
 
-  .type-select { display: flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; flex-shrink: 0; }
+  .type-select { display: flex; flex-direction: column; max-width: 100%; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; flex-shrink: 0; }
+  .type-select-row { display: flex; flex-wrap: wrap; }
+  .type-select-row-custom { border-top: 1px solid var(--line); }
   .type-btn {
     flex: 1 1 auto;
     font-family: 'Source Sans 3', sans-serif;

@@ -53,7 +53,7 @@ function defaultResponseFields(type) {
   if (type === 'photo') return { photos: [] };
   if (type === 'section') return { collapsed: false };
   if (type === 'hazard-matrix') return { rows: [{ id: uid(), step: '', hazard: '', control: '' }] };
-  if (type === 'ppe') return { checkedPpe: [], otherText: '' };
+  if (type === 'ppe') return { checkedPpe: [], customPpe: [] };
   if (type === 'signoff') {
     var supportsTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     return { mode: supportsTouch ? 'draw' : 'type', signature: null, name: '', date: '' };
@@ -70,6 +70,7 @@ function cloneItem(item) {
   if (copy.photos) copy.photos = copy.photos.slice();
   if (copy.rows) copy.rows = copy.rows.map(function (r) { return Object.assign({}, r, { id: uid() }); });
   if (copy.checkedPpe) copy.checkedPpe = copy.checkedPpe.slice();
+  if (copy.customPpe) copy.customPpe = copy.customPpe.slice();
   return copy;
 }
 
@@ -112,12 +113,10 @@ function defaultState() {
   };
 }
 
-// Photo items used to carry a single `photo` object; normalize any item saved
-// or imported before multi-photo support to the `photos` array it now
-// expects. Mutates and returns the item for convenient use in forEach/map.
 // Guards against malformed/foreign data (an imported file, or state saved by
-// an older version) leaving an item without the array fields its type's
-// rendering and actions assume are always there.
+// an older version) leaving an item without the fields its type's rendering
+// and actions assume are always there. Mutates and returns the item for
+// convenient use in forEach/map.
 function normalizeItemShape(item) {
   if (item.type === 'photo' && !Array.isArray(item.photos)) {
     item.photos = item.photo ? [item.photo] : [];
@@ -128,6 +127,15 @@ function normalizeItemShape(item) {
   }
   if (item.type === 'ppe' && !Array.isArray(item.checkedPpe)) {
     item.checkedPpe = [];
+  }
+  if (item.type === 'ppe' && !Array.isArray(item.customPpe)) {
+    // The free-text "Other" field predates the add-a-pill version of PPE —
+    // carry over whatever was typed there as a (checked) custom pill instead
+    // of silently dropping it.
+    var legacyOther = item.otherText && item.otherText.trim();
+    item.customPpe = legacyOther ? [legacyOther] : [];
+    if (legacyOther && item.checkedPpe.indexOf(legacyOther) === -1) item.checkedPpe.push(legacyOther);
+    delete item.otherText;
   }
   return item;
 }
@@ -190,7 +198,12 @@ function saveTemplates() {
 var templates;
 
 function templateItemFromItem(item) {
-  return { id: uid(), label: item.label, type: item.type };
+  var templateItem = { id: uid(), label: item.label, type: item.type };
+  // Custom PPE pills are structural (which equipment this JSA calls for), not
+  // a response, so a template preserves them — unchecked, like everything
+  // else a template carries forward.
+  if (item.type === 'ppe' && item.customPpe && item.customPpe.length) templateItem.customPpe = item.customPpe.slice();
+  return templateItem;
 }
 
 function createTemplateFromChecklist(checklist, title) {
@@ -210,10 +223,12 @@ function checklistFromTemplate(template) {
   return newChecklist({
     title: template.title,
     items: template.items.map(function (templateItem) {
-      return Object.assign(
+      var item = Object.assign(
         { id: uid(), label: templateItem.label, type: templateItem.type },
         defaultResponseFields(templateItem.type)
       );
+      if (templateItem.type === 'ppe' && Array.isArray(templateItem.customPpe)) item.customPpe = templateItem.customPpe.slice();
+      return item;
     }),
     locked: !!template.locked
   });
@@ -400,7 +415,7 @@ function isItemAnswered(item) {
   if (item.type === 'hazard-matrix') {
     return (item.rows || []).some(function (r) { return (r.step && r.step.trim()) || (r.hazard && r.hazard.trim()) || (r.control && r.control.trim()); });
   }
-  if (item.type === 'ppe') return !!((item.checkedPpe && item.checkedPpe.length) || (item.otherText && item.otherText.trim()));
+  if (item.type === 'ppe') return !!(item.checkedPpe && item.checkedPpe.length);
   if (item.type === 'signoff') {
     return (item.mode !== 'type' && !!item.signature) || (item.mode === 'type' && !!(item.name && item.name.trim()));
   }
@@ -463,6 +478,10 @@ function itemTemplate(item, num, idx, itemsLen) {
       'data-action="toggle" data-id="' + item.id + '" aria-pressed="' + !!item.checked + '" aria-labelledby="item-label-' + item.id + '">' +
       '<svg viewBox="0 0 24 24" class="check-mark"><path d="M4 12.5 L9.5 18 L20 5" /></svg>' +
       '</button>';
+  } else if (item.type === 'hazard-matrix' || item.type === 'ppe') {
+    // These are more block/container than single yes-or-no question — no
+    // per-item completion indicator, same as a section.
+    toggleHtml = '';
   } else {
     // Read-only completion indicator for non-checkbox rows — not interactive,
     // the item's own response (text/photo/signature) is what's answered.
@@ -476,8 +495,8 @@ function itemTemplate(item, num, idx, itemsLen) {
   if (item.type === 'text') {
     responseHtml =
       '<div class="item-response">' +
-      '<input type="text" class="response-text" data-action="text" data-id="' + item.id + '" ' +
-      'value="' + escapeHtml(item.text || '') + '" placeholder="Response">' +
+      '<textarea class="response-text" data-action="text" data-id="' + item.id + '" rows="1" ' +
+      'placeholder="Response">' + escapeHtml(item.text || '') + '</textarea>' +
       '</div>';
   } else if (item.type === 'photo') {
     var photos = item.photos || [];
@@ -501,9 +520,9 @@ function itemTemplate(item, num, idx, itemsLen) {
         '</div>' +
         rows.map(function (row) {
           return '<div class="hazard-matrix-row" data-row-id="' + row.id + '">' +
-            '<input type="text" class="hazard-field" data-action="hazard-field" data-field="step" data-id="' + item.id + '" data-row-id="' + row.id + '" value="' + escapeHtml(row.step || '') + '" placeholder="Job step / activity">' +
-            '<input type="text" class="hazard-field" data-action="hazard-field" data-field="hazard" data-id="' + item.id + '" data-row-id="' + row.id + '" value="' + escapeHtml(row.hazard || '') + '" placeholder="Hazard(s)">' +
-            '<input type="text" class="hazard-field" data-action="hazard-field" data-field="control" data-id="' + item.id + '" data-row-id="' + row.id + '" value="' + escapeHtml(row.control || '') + '" placeholder="Control / mitigation">' +
+            '<textarea class="hazard-field" data-action="hazard-field" data-field="step" data-id="' + item.id + '" data-row-id="' + row.id + '" rows="1" placeholder="Job step / activity">' + escapeHtml(row.step || '') + '</textarea>' +
+            '<textarea class="hazard-field" data-action="hazard-field" data-field="hazard" data-id="' + item.id + '" data-row-id="' + row.id + '" rows="1" placeholder="Hazard(s)">' + escapeHtml(row.hazard || '') + '</textarea>' +
+            '<textarea class="hazard-field" data-action="hazard-field" data-field="control" data-id="' + item.id + '" data-row-id="' + row.id + '" rows="1" placeholder="Control / mitigation">' + escapeHtml(row.control || '') + '</textarea>' +
             '<button type="button" class="hazard-row-remove" data-action="remove-hazard-row" data-id="' + item.id + '" data-row-id="' + row.id + '" aria-label="Remove row">×</button>' +
           '</div>';
         }).join('') +
@@ -511,6 +530,7 @@ function itemTemplate(item, num, idx, itemsLen) {
       '</div></div>';
   } else if (item.type === 'ppe') {
     var checkedPpe = item.checkedPpe || [];
+    var customPpe = item.customPpe || [];
     responseHtml =
       '<div class="item-response">' +
         '<div class="ppe-grid">' +
@@ -522,8 +542,19 @@ function itemTemplate(item, num, idx, itemsLen) {
               '<span>' + escapeHtml(label) + '</span>' +
             '</button>';
           }).join('') +
+          customPpe.map(function (label) {
+            var checked = checkedPpe.indexOf(label) !== -1;
+            return '<div class="ppe-option-wrap">' +
+              '<button type="button" class="ppe-option' + (checked ? ' checked' : '') + '" ' +
+                'data-action="toggle-ppe" data-id="' + item.id + '" data-label="' + escapeHtml(label) + '" aria-pressed="' + checked + '">' +
+                '<span class="ppe-option-check"><svg viewBox="0 0 24 24" class="check-mark"><path d="M4 12.5 L9.5 18 L20 5" /></svg></span>' +
+                '<span>' + escapeHtml(label) + '</span>' +
+              '</button>' +
+              '<button type="button" class="ppe-custom-remove" data-action="remove-ppe-custom" data-id="' + item.id + '" data-label="' + escapeHtml(label) + '" aria-label="Remove ' + escapeHtml(label) + '">×</button>' +
+            '</div>';
+          }).join('') +
         '</div>' +
-        '<input type="text" class="ppe-other-input" data-action="ppe-other" data-id="' + item.id + '" value="' + escapeHtml(item.otherText || '') + '" placeholder="Other PPE (optional)">' +
+        '<input type="text" class="ppe-other-input" data-id="' + item.id + '" placeholder="Add other PPE and press Enter">' +
       '</div>';
   } else if (item.type === 'signoff') {
     var isSigned = answered;
@@ -604,6 +635,14 @@ function renderTabs() {
   tabBarEl.innerHTML = tabsHtml + '<button type="button" id="addTabBtn" class="tab-add" aria-label="Add checklist" title="Add checklist">+</button>';
 }
 
+// Grows a response textarea to fit its content instead of scrolling — called
+// on every keystroke and after each render, since render() replaces the DOM
+// and a fresh textarea always starts back at its default single-row height.
+function autoResizeTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
 function render() {
   collectionTitleInput.value = state.collectionTitle;
   document.title = state.collectionTitle || 'Checklist Collection';
@@ -641,6 +680,11 @@ function render() {
     var draggedEl = itemListEl.querySelector('[data-id="' + dragState.id + '"]');
     if (draggedEl) draggedEl.classList.add('dragging');
   }
+  // A freshly rendered textarea starts at its default single-row height
+  // regardless of how much text it already holds — size each one to its
+  // content now so saved multi-line answers don't get clipped until the
+  // user happens to type in them again.
+  itemListEl.querySelectorAll('.response-text, .hazard-field').forEach(autoResizeTextarea);
   setupSignatureCanvases();
   updateLockUI(active);
   updateProgressUI(active);
@@ -774,6 +818,12 @@ itemListEl.addEventListener('click', function (e) {
     var ppeIdx = item.checkedPpe.indexOf(ppeLabel);
     if (ppeIdx === -1) item.checkedPpe.push(ppeLabel); else item.checkedPpe.splice(ppeIdx, 1);
     saveState(); render();
+  } else if (action === 'remove-ppe-custom' && item) {
+    var removeLabel = btn.dataset.label;
+    item.customPpe = item.customPpe.filter(function (l) { return l !== removeLabel; });
+    var checkedIdx = item.checkedPpe.indexOf(removeLabel);
+    if (checkedIdx !== -1) item.checkedPpe.splice(checkedIdx, 1);
+    saveState(); render();
   } else if (action === 'add-hazard-row' && item) {
     item.rows.push({ id: uid(), step: '', hazard: '', control: '' });
     saveState(); render();
@@ -870,6 +920,7 @@ document.addEventListener('click', function (e) {
 
 itemListEl.addEventListener('input', function (e) {
   var action = e.target.dataset.action;
+  if (action === 'text' || action === 'hazard-field') autoResizeTextarea(e.target);
   var active = getActive();
   var item = active.items.find(function (i) { return i.id === e.target.dataset.id; });
   if (!item) return;
@@ -881,7 +932,6 @@ itemListEl.addEventListener('input', function (e) {
     var row = (item.rows || []).find(function (r) { return r.id === e.target.dataset.rowId; });
     if (row) { row[e.target.dataset.field] = e.target.value; saveState(); }
   }
-  else if (action === 'ppe-other') { item.otherText = e.target.value; saveState(); }
 });
 
 var photoFileInput = document.getElementById('photoFileInput');
@@ -1154,6 +1204,25 @@ itemListEl.addEventListener('keydown', function (e) {
     if (item) item.label = itemRenameOriginal;
     e.target.blur();
   }
+});
+
+// The "Other PPE" field is a composer, not a bound response field: typing a
+// name and pressing Enter turns it into a regular checkable pill (checked,
+// since naming it here means it's needed) rather than saving the typed text
+// itself. The field stays focused afterward so adding several in a row
+// doesn't need re-clicking into it each time.
+itemListEl.addEventListener('keydown', function (e) {
+  if (!e.target.classList.contains('ppe-other-input') || e.key !== 'Enter') return;
+  e.preventDefault();
+  var value = e.target.value.trim();
+  if (!value) return;
+  var item = getActive().items.find(function (i) { return i.id === e.target.dataset.id; });
+  if (!item) return;
+  if (PPE_OPTIONS.indexOf(value) === -1 && item.customPpe.indexOf(value) === -1) item.customPpe.push(value);
+  if (item.checkedPpe.indexOf(value) === -1) item.checkedPpe.push(value);
+  saveState(); render();
+  var freshInput = itemListEl.querySelector('.ppe-other-input[data-id="' + item.id + '"]');
+  if (freshInput) freshInput.focus();
 });
 
 var PLACEHOLDERS = { section: 'Section heading', signoff: 'Sign-off label', 'hazard-matrix': 'e.g. Hazard Analysis', ppe: 'e.g. Required PPE' };
@@ -1472,10 +1541,11 @@ async function buildPdfBlob() {
       var ppeCols = 3;
       var ppeColW = (maxWidth - 24) / ppeCols;
       var checkedPpe = item.checkedPpe || [];
+      var ppeAllOptions = PPE_OPTIONS.concat(item.customPpe || []);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      for (var pr = 0; pr < PPE_OPTIONS.length; pr += ppeCols) {
-        var ppeRow = PPE_OPTIONS.slice(pr, pr + ppeCols);
+      for (var pr = 0; pr < ppeAllOptions.length; pr += ppeCols) {
+        var ppeRow = ppeAllOptions.slice(pr, pr + ppeCols);
         var ppeCellLines = ppeRow.map(function (label) { return doc.splitTextToSize(label, ppeColW - 16); });
         var ppeRowH = Math.max.apply(null, ppeCellLines.map(function (l) { return l.length; })) * 10 + 4;
         ensureSpace(ppeRowH);
@@ -1488,13 +1558,6 @@ async function buildPdfBlob() {
           doc.setTextColor(20, 20, 20);
         });
         y += ppeRowH;
-      }
-      if (item.otherText && item.otherText.trim()) {
-        ensureSpace(14);
-        doc.setFont('helvetica', 'italic');
-        doc.text('Other: ' + item.otherText.trim(), labelX, y);
-        doc.setFont('helvetica', 'normal');
-        y += 14;
       }
       y += 4;
     } else if (item.type === 'signoff') {
