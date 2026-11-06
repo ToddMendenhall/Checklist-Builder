@@ -52,7 +52,7 @@ function defaultResponseFields(type) {
   if (type === 'text') return { text: '' };
   if (type === 'photo') return { photos: [] };
   if (type === 'section') return { collapsed: false };
-  if (type === 'hazard-matrix') return { rows: [{ id: uid(), step: '', hazard: '', control: '' }] };
+  if (type === 'hazard-matrix') return { steps: [{ id: uid(), step: '', entries: [{ id: uid(), hazard: '', control: '' }] }] };
   if (type === 'ppe') return { checkedPpe: [], customPpe: [] };
   if (type === 'signoff') {
     var supportsTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -68,7 +68,14 @@ function defaultResponseFields(type) {
 function cloneItem(item) {
   var copy = Object.assign({}, item, { id: uid() });
   if (copy.photos) copy.photos = copy.photos.slice();
-  if (copy.rows) copy.rows = copy.rows.map(function (r) { return Object.assign({}, r, { id: uid() }); });
+  if (copy.steps) {
+    copy.steps = copy.steps.map(function (s) {
+      return Object.assign({}, s, {
+        id: uid(),
+        entries: s.entries.map(function (en) { return Object.assign({}, en, { id: uid() }); })
+      });
+    });
+  }
   if (copy.checkedPpe) copy.checkedPpe = copy.checkedPpe.slice();
   if (copy.customPpe) copy.customPpe = copy.customPpe.slice();
   return copy;
@@ -122,8 +129,15 @@ function normalizeItemShape(item) {
     item.photos = item.photo ? [item.photo] : [];
     delete item.photo;
   }
-  if (item.type === 'hazard-matrix' && !Array.isArray(item.rows)) {
-    item.rows = [];
+  if (item.type === 'hazard-matrix' && !Array.isArray(item.steps)) {
+    // Each job step used to be its own flat {step, hazard, control} row, with
+    // no way to list more than one hazard under the same step — migrate each
+    // old row into a step carrying that one hazard/control as its sole entry,
+    // rather than dropping the step/hazard/control text it already held.
+    item.steps = (Array.isArray(item.rows) ? item.rows : []).map(function (r) {
+      return { id: r.id || uid(), step: r.step || '', entries: [{ id: uid(), hazard: r.hazard || '', control: r.control || '' }] };
+    });
+    delete item.rows;
   }
   if (item.type === 'ppe' && !Array.isArray(item.checkedPpe)) {
     item.checkedPpe = [];
@@ -413,7 +427,10 @@ function isItemAnswered(item) {
   if (item.type === 'text') return !!(item.text && item.text.trim());
   if (item.type === 'photo') return !!(item.photos && item.photos.length);
   if (item.type === 'hazard-matrix') {
-    return (item.rows || []).some(function (r) { return (r.step && r.step.trim()) || (r.hazard && r.hazard.trim()) || (r.control && r.control.trim()); });
+    return (item.steps || []).some(function (s) {
+      if (s.step && s.step.trim()) return true;
+      return (s.entries || []).some(function (en) { return (en.hazard && en.hazard.trim()) || (en.control && en.control.trim()); });
+    });
   }
   if (item.type === 'ppe') return !!(item.checkedPpe && item.checkedPpe.length);
   if (item.type === 'signoff') {
@@ -512,21 +529,34 @@ function itemTemplate(item, num, idx, itemsLen) {
       '<button type="button" class="photo-btn" data-action="photo" data-id="' + item.id + '">＋ Add photo</button>' +
       '</div></div>';
   } else if (item.type === 'hazard-matrix') {
-    var rows = item.rows || [];
+    var steps = item.steps || [];
     responseHtml =
       '<div class="item-response"><div class="hazard-matrix">' +
         '<div class="hazard-matrix-head" aria-hidden="true">' +
-          '<span>Job Step / Activity</span><span>Hazard(s)</span><span>Control / Mitigation</span><span></span>' +
+          '<span class="hazard-col-step">Job Step / Activity</span><span class="hazard-col-hazard">Hazard(s)</span><span class="hazard-col-control">Control / Mitigation</span>' +
         '</div>' +
-        rows.map(function (row) {
-          return '<div class="hazard-matrix-row" data-row-id="' + row.id + '">' +
-            '<textarea class="hazard-field" data-action="hazard-field" data-field="step" data-id="' + item.id + '" data-row-id="' + row.id + '" rows="1" placeholder="Job step / activity">' + escapeHtml(row.step || '') + '</textarea>' +
-            '<textarea class="hazard-field" data-action="hazard-field" data-field="hazard" data-id="' + item.id + '" data-row-id="' + row.id + '" rows="1" placeholder="Hazard(s)">' + escapeHtml(row.hazard || '') + '</textarea>' +
-            '<textarea class="hazard-field" data-action="hazard-field" data-field="control" data-id="' + item.id + '" data-row-id="' + row.id + '" rows="1" placeholder="Control / mitigation">' + escapeHtml(row.control || '') + '</textarea>' +
-            '<button type="button" class="hazard-row-remove" data-action="remove-hazard-row" data-id="' + item.id + '" data-row-id="' + row.id + '" aria-label="Remove row">×</button>' +
+        steps.map(function (step) {
+          var entries = step.entries || [];
+          return '<div class="hazard-step" data-step-id="' + step.id + '">' +
+            '<div class="hazard-step-label">' +
+              '<textarea class="hazard-field" data-action="hazard-step-field" data-id="' + item.id + '" data-step-id="' + step.id + '" rows="1" placeholder="Job step / activity">' + escapeHtml(step.step || '') + '</textarea>' +
+              '<button type="button" class="hazard-step-remove" data-action="remove-hazard-step" data-id="' + item.id + '" data-step-id="' + step.id + '" aria-label="Remove job step">×</button>' +
+            '</div>' +
+            '<div class="hazard-entries">' +
+              entries.map(function (entry) {
+                return '<div class="hazard-entry">' +
+                  '<textarea class="hazard-field" data-action="hazard-entry-field" data-field="hazard" data-id="' + item.id + '" data-step-id="' + step.id + '" data-entry-id="' + entry.id + '" rows="1" placeholder="Hazard(s)">' + escapeHtml(entry.hazard || '') + '</textarea>' +
+                  '<textarea class="hazard-field" data-action="hazard-entry-field" data-field="control" data-id="' + item.id + '" data-step-id="' + step.id + '" data-entry-id="' + entry.id + '" rows="1" placeholder="Control / mitigation">' + escapeHtml(entry.control || '') + '</textarea>' +
+                  (entries.length > 1
+                    ? '<button type="button" class="hazard-entry-remove" data-action="remove-hazard-entry" data-id="' + item.id + '" data-step-id="' + step.id + '" data-entry-id="' + entry.id + '" aria-label="Remove hazard">×</button>'
+                    : '<span class="hazard-entry-remove-spacer"></span>') +
+                '</div>';
+              }).join('') +
+              '<button type="button" class="hazard-add-entry" data-action="add-hazard-entry" data-id="' + item.id + '" data-step-id="' + step.id + '">＋ Add hazard</button>' +
+            '</div>' +
           '</div>';
         }).join('') +
-        '<button type="button" class="hazard-add-row" data-action="add-hazard-row" data-id="' + item.id + '">＋ Add row</button>' +
+        '<button type="button" class="hazard-add-step" data-action="add-hazard-step" data-id="' + item.id + '">＋ Add job step</button>' +
       '</div></div>';
   } else if (item.type === 'ppe') {
     var checkedPpe = item.checkedPpe || [];
@@ -824,11 +854,21 @@ itemListEl.addEventListener('click', function (e) {
     var checkedIdx = item.checkedPpe.indexOf(removeLabel);
     if (checkedIdx !== -1) item.checkedPpe.splice(checkedIdx, 1);
     saveState(); render();
-  } else if (action === 'add-hazard-row' && item) {
-    item.rows.push({ id: uid(), step: '', hazard: '', control: '' });
+  } else if (action === 'add-hazard-step' && item) {
+    item.steps.push({ id: uid(), step: '', entries: [{ id: uid(), hazard: '', control: '' }] });
     saveState(); render();
-  } else if (action === 'remove-hazard-row' && item) {
-    item.rows = item.rows.filter(function (r) { return r.id !== btn.dataset.rowId; });
+  } else if (action === 'remove-hazard-step' && item) {
+    item.steps = item.steps.filter(function (s) { return s.id !== btn.dataset.stepId; });
+    saveState(); render();
+  } else if (action === 'add-hazard-entry' && item) {
+    var entryStep = item.steps.find(function (s) { return s.id === btn.dataset.stepId; });
+    if (entryStep) entryStep.entries.push({ id: uid(), hazard: '', control: '' });
+    saveState(); render();
+  } else if (action === 'remove-hazard-entry' && item) {
+    var removeStep = item.steps.find(function (s) { return s.id === btn.dataset.stepId; });
+    if (removeStep && removeStep.entries.length > 1) {
+      removeStep.entries = removeStep.entries.filter(function (en) { return en.id !== btn.dataset.entryId; });
+    }
     saveState(); render();
   } else if (action === 'mode' && item) {
     item.mode = btn.dataset.mode;
@@ -920,7 +960,7 @@ document.addEventListener('click', function (e) {
 
 itemListEl.addEventListener('input', function (e) {
   var action = e.target.dataset.action;
-  if (action === 'text' || action === 'hazard-field') autoResizeTextarea(e.target);
+  if (e.target.tagName === 'TEXTAREA') autoResizeTextarea(e.target);
   var active = getActive();
   var item = active.items.find(function (i) { return i.id === e.target.dataset.id; });
   if (!item) return;
@@ -928,9 +968,14 @@ itemListEl.addEventListener('input', function (e) {
   else if (action === 'signoff-name') { item.name = e.target.value; saveState(); }
   else if (action === 'signoff-date') { item.date = e.target.value; saveState(); }
   else if (action === 'rename-input') { item.label = e.target.value; saveState(); }
-  else if (action === 'hazard-field') {
-    var row = (item.rows || []).find(function (r) { return r.id === e.target.dataset.rowId; });
-    if (row) { row[e.target.dataset.field] = e.target.value; saveState(); }
+  else if (action === 'hazard-step-field') {
+    var hStep = (item.steps || []).find(function (s) { return s.id === e.target.dataset.stepId; });
+    if (hStep) { hStep.step = e.target.value; saveState(); }
+  }
+  else if (action === 'hazard-entry-field') {
+    var hEntryStep = (item.steps || []).find(function (s) { return s.id === e.target.dataset.stepId; });
+    var hEntry = hEntryStep && hEntryStep.entries.find(function (en) { return en.id === e.target.dataset.entryId; });
+    if (hEntry) { hEntry[e.target.dataset.field] = e.target.value; saveState(); }
   }
 });
 
@@ -1502,16 +1547,13 @@ async function buildPdfBlob() {
       doc.setTextColor(20, 20, 20);
       y += 16;
     } else if (item.type === 'hazard-matrix') {
-      var hazCols = [
-        { key: 'step', header: 'Job Step / Activity' },
-        { key: 'hazard', header: 'Hazard(s)' },
-        { key: 'control', header: 'Control / Mitigation' }
-      ];
-      var hazColW = (maxWidth - 24) / hazCols.length;
-      var hazRows = (item.rows || []).filter(function (r) {
-        return (r.step && r.step.trim()) || (r.hazard && r.hazard.trim()) || (r.control && r.control.trim());
+      var hazIndent = 16;
+      var hazColW = (maxWidth - 24 - hazIndent) / 2;
+      var hazSteps = (item.steps || []).filter(function (s) {
+        if (s.step && s.step.trim()) return true;
+        return (s.entries || []).some(function (en) { return (en.hazard && en.hazard.trim()) || (en.control && en.control.trim()); });
       });
-      if (!hazRows.length) {
+      if (!hazSteps.length) {
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(10);
         doc.setTextColor(138, 146, 155);
@@ -1519,21 +1561,34 @@ async function buildPdfBlob() {
         doc.setTextColor(20, 20, 20);
         y += 16;
       } else {
-        ensureSpace(14);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(108, 116, 128);
-        hazCols.forEach(function (col, ci) { doc.text(col.header, labelX + ci * hazColW, y); });
-        doc.setTextColor(20, 20, 20);
-        y += 10;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9.5);
-        hazRows.forEach(function (row) {
-          var cellLines = hazCols.map(function (col) { return doc.splitTextToSize(row[col.key] || '—', hazColW - 10); });
-          var rowH = Math.max.apply(null, cellLines.map(function (lines) { return lines.length; })) * 11 + 6;
-          ensureSpace(rowH);
-          cellLines.forEach(function (lines, ci) { doc.text(lines, labelX + ci * hazColW, y); });
-          y += rowH;
+        hazSteps.forEach(function (step, si) {
+          var stepLines = doc.splitTextToSize(step.step || '(unnamed step)', maxWidth - 24);
+          ensureSpace(stepLines.length * 12 + 14);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.text(stepLines, labelX, y);
+          y += stepLines.length * 12 + 2;
+
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8.5);
+          doc.setTextColor(108, 116, 128);
+          doc.text('Hazard(s)', labelX + hazIndent, y);
+          doc.text('Control / Mitigation', labelX + hazIndent + hazColW, y);
+          doc.setTextColor(20, 20, 20);
+          y += 10;
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9.5);
+          (step.entries || []).forEach(function (entry) {
+            var hazLines = doc.splitTextToSize(entry.hazard || '—', hazColW - 10);
+            var ctrlLines = doc.splitTextToSize(entry.control || '—', hazColW - 10);
+            var entryRowH = Math.max(hazLines.length, ctrlLines.length) * 11 + 6;
+            ensureSpace(entryRowH);
+            doc.text(hazLines, labelX + hazIndent, y);
+            doc.text(ctrlLines, labelX + hazIndent + hazColW, y);
+            y += entryRowH;
+          });
+          y += si === hazSteps.length - 1 ? 0 : 8;
         });
         y += 4;
       }
