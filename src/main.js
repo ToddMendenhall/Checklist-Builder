@@ -36,12 +36,24 @@ function tabColorVarForId(id) {
   return 'var(--tab-color-' + (hash % TAB_COLOR_SLOT_COUNT) + ')';
 }
 
+// The fixed PPE catalog a 'ppe' item offers — one checkbox per entry, plus a
+// free-text "Other" field for anything not on the list. Shared across every
+// ppe item rather than stored per-item, since (unlike hazard rows) it isn't
+// job-specific data: every JSA draws from the same equipment list.
+var PPE_OPTIONS = [
+  'Hard Hat', 'Safety Glasses', 'Safety Toed Shoes', 'Gloves', 'Chemical Goggles', 'Respirator', 'Chemical Gloves',
+  '4 Gas Monitor', 'H2S Monitor', 'Insulated Gloves', 'Full Body Harness', 'Slicker Suit', 'Hearing Protection', 'Fire Retardant Clothing',
+  'PFD/Work Vest', 'Particulate Mask', 'Cotton Work Gloves', 'Impact Gloves', 'Self Retracting Lifeline', 'Chemical Apron', 'Chemical Boots'
+];
+
 // Response fields a filled-in checklist item carries that a template item does not.
 function defaultResponseFields(type) {
   if (type === 'checkbox') return { checked: false };
   if (type === 'text') return { text: '' };
   if (type === 'photo') return { photos: [] };
   if (type === 'section') return { collapsed: false };
+  if (type === 'hazard-matrix') return { rows: [{ id: uid(), step: '', hazard: '', control: '' }] };
+  if (type === 'ppe') return { checkedPpe: [], otherText: '' };
   if (type === 'signoff') {
     var supportsTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     return { mode: supportsTouch ? 'draw' : 'type', signature: null, name: '', date: '' };
@@ -56,6 +68,8 @@ function defaultResponseFields(type) {
 function cloneItem(item) {
   var copy = Object.assign({}, item, { id: uid() });
   if (copy.photos) copy.photos = copy.photos.slice();
+  if (copy.rows) copy.rows = copy.rows.map(function (r) { return Object.assign({}, r, { id: uid() }); });
+  if (copy.checkedPpe) copy.checkedPpe = copy.checkedPpe.slice();
   return copy;
 }
 
@@ -101,17 +115,26 @@ function defaultState() {
 // Photo items used to carry a single `photo` object; normalize any item saved
 // or imported before multi-photo support to the `photos` array it now
 // expects. Mutates and returns the item for convenient use in forEach/map.
-function normalizePhotoItem(item) {
+// Guards against malformed/foreign data (an imported file, or state saved by
+// an older version) leaving an item without the array fields its type's
+// rendering and actions assume are always there.
+function normalizeItemShape(item) {
   if (item.type === 'photo' && !Array.isArray(item.photos)) {
     item.photos = item.photo ? [item.photo] : [];
     delete item.photo;
+  }
+  if (item.type === 'hazard-matrix' && !Array.isArray(item.rows)) {
+    item.rows = [];
+  }
+  if (item.type === 'ppe' && !Array.isArray(item.checkedPpe)) {
+    item.checkedPpe = [];
   }
   return item;
 }
 
 function migratePhotoItems(parsed) {
   parsed.checklists.forEach(function (checklist) {
-    checklist.items.forEach(normalizePhotoItem);
+    checklist.items.forEach(normalizeItemShape);
   });
   return parsed;
 }
@@ -302,7 +325,7 @@ function checklistFromRaw(raw) {
     date: (raw && raw.date && String(raw.date)) || '',
     items: (raw && Array.isArray(raw.items) ? raw.items : [])
       .filter(function (item) { return item && typeof item.label === 'string' && typeof item.type === 'string'; })
-      .map(function (item) { return normalizePhotoItem(Object.assign({}, item, { id: uid() })); }),
+      .map(function (item) { return normalizeItemShape(Object.assign({}, item, { id: uid() })); }),
     locked: !!(raw && raw.locked)
   };
 }
@@ -374,6 +397,10 @@ function isItemAnswered(item) {
   if (item.type === 'checkbox') return !!item.checked;
   if (item.type === 'text') return !!(item.text && item.text.trim());
   if (item.type === 'photo') return !!(item.photos && item.photos.length);
+  if (item.type === 'hazard-matrix') {
+    return (item.rows || []).some(function (r) { return (r.step && r.step.trim()) || (r.hazard && r.hazard.trim()) || (r.control && r.control.trim()); });
+  }
+  if (item.type === 'ppe') return !!((item.checkedPpe && item.checkedPpe.length) || (item.otherText && item.otherText.trim()));
   if (item.type === 'signoff') {
     return (item.mode !== 'type' && !!item.signature) || (item.mode === 'type' && !!(item.name && item.name.trim()));
   }
@@ -385,7 +412,7 @@ function checklistProgress(checklist) {
   return { answered: answered, total: answerable.length };
 }
 
-var TYPE_META_LABEL = { checkbox: 'CHECK', text: 'TEXT', photo: 'PHOTO', signoff: 'SIGN-OFF' };
+var TYPE_META_LABEL = { checkbox: 'CHECK', text: 'TEXT', photo: 'PHOTO', signoff: 'SIGN-OFF', 'hazard-matrix': 'HAZARDS', ppe: 'PPE' };
 
 function itemMenuHtml(item, idx, itemsLen) {
   var open = openItemMenuId === item.id;
@@ -465,6 +492,39 @@ function itemTemplate(item, num, idx, itemsLen) {
       }).join('') +
       '<button type="button" class="photo-btn" data-action="photo" data-id="' + item.id + '">＋ Add photo</button>' +
       '</div></div>';
+  } else if (item.type === 'hazard-matrix') {
+    var rows = item.rows || [];
+    responseHtml =
+      '<div class="item-response"><div class="hazard-matrix">' +
+        '<div class="hazard-matrix-head" aria-hidden="true">' +
+          '<span>Job Step / Activity</span><span>Hazard(s)</span><span>Control / Mitigation</span><span></span>' +
+        '</div>' +
+        rows.map(function (row) {
+          return '<div class="hazard-matrix-row" data-row-id="' + row.id + '">' +
+            '<input type="text" class="hazard-field" data-action="hazard-field" data-field="step" data-id="' + item.id + '" data-row-id="' + row.id + '" value="' + escapeHtml(row.step || '') + '" placeholder="Job step / activity">' +
+            '<input type="text" class="hazard-field" data-action="hazard-field" data-field="hazard" data-id="' + item.id + '" data-row-id="' + row.id + '" value="' + escapeHtml(row.hazard || '') + '" placeholder="Hazard(s)">' +
+            '<input type="text" class="hazard-field" data-action="hazard-field" data-field="control" data-id="' + item.id + '" data-row-id="' + row.id + '" value="' + escapeHtml(row.control || '') + '" placeholder="Control / mitigation">' +
+            '<button type="button" class="hazard-row-remove" data-action="remove-hazard-row" data-id="' + item.id + '" data-row-id="' + row.id + '" aria-label="Remove row">×</button>' +
+          '</div>';
+        }).join('') +
+        '<button type="button" class="hazard-add-row" data-action="add-hazard-row" data-id="' + item.id + '">＋ Add row</button>' +
+      '</div></div>';
+  } else if (item.type === 'ppe') {
+    var checkedPpe = item.checkedPpe || [];
+    responseHtml =
+      '<div class="item-response">' +
+        '<div class="ppe-grid">' +
+          PPE_OPTIONS.map(function (label) {
+            var checked = checkedPpe.indexOf(label) !== -1;
+            return '<button type="button" class="ppe-option' + (checked ? ' checked' : '') + '" ' +
+              'data-action="toggle-ppe" data-id="' + item.id + '" data-label="' + escapeHtml(label) + '" aria-pressed="' + checked + '">' +
+              '<span class="ppe-option-check"><svg viewBox="0 0 24 24" class="check-mark"><path d="M4 12.5 L9.5 18 L20 5" /></svg></span>' +
+              '<span>' + escapeHtml(label) + '</span>' +
+            '</button>';
+          }).join('') +
+        '</div>' +
+        '<input type="text" class="ppe-other-input" data-action="ppe-other" data-id="' + item.id + '" value="' + escapeHtml(item.otherText || '') + '" placeholder="Other PPE (optional)">' +
+      '</div>';
   } else if (item.type === 'signoff') {
     var isSigned = answered;
     var showEditing = !isSigned || signoffEditingIds.has(item.id);
@@ -709,6 +769,17 @@ itemListEl.addEventListener('click', function (e) {
   } else if (action === 'remove-photo' && item) {
     item.photos.splice(Number(btn.dataset.photoIdx), 1);
     saveState(); render();
+  } else if (action === 'toggle-ppe' && item) {
+    var ppeLabel = btn.dataset.label;
+    var ppeIdx = item.checkedPpe.indexOf(ppeLabel);
+    if (ppeIdx === -1) item.checkedPpe.push(ppeLabel); else item.checkedPpe.splice(ppeIdx, 1);
+    saveState(); render();
+  } else if (action === 'add-hazard-row' && item) {
+    item.rows.push({ id: uid(), step: '', hazard: '', control: '' });
+    saveState(); render();
+  } else if (action === 'remove-hazard-row' && item) {
+    item.rows = item.rows.filter(function (r) { return r.id !== btn.dataset.rowId; });
+    saveState(); render();
   } else if (action === 'mode' && item) {
     item.mode = btn.dataset.mode;
     saveState(); render();
@@ -806,6 +877,11 @@ itemListEl.addEventListener('input', function (e) {
   else if (action === 'signoff-name') { item.name = e.target.value; saveState(); }
   else if (action === 'signoff-date') { item.date = e.target.value; saveState(); }
   else if (action === 'rename-input') { item.label = e.target.value; saveState(); }
+  else if (action === 'hazard-field') {
+    var row = (item.rows || []).find(function (r) { return r.id === e.target.dataset.rowId; });
+    if (row) { row[e.target.dataset.field] = e.target.value; saveState(); }
+  }
+  else if (action === 'ppe-other') { item.otherText = e.target.value; saveState(); }
 });
 
 var photoFileInput = document.getElementById('photoFileInput');
@@ -1080,7 +1156,7 @@ itemListEl.addEventListener('keydown', function (e) {
   }
 });
 
-var PLACEHOLDERS = { section: 'Section heading', signoff: 'Sign-off label' };
+var PLACEHOLDERS = { section: 'Section heading', signoff: 'Sign-off label', 'hazard-matrix': 'e.g. Hazard Analysis', ppe: 'e.g. Required PPE' };
 var DEFAULT_ADD_PLACEHOLDER = '＋ Add item';
 typeButtons.forEach(function (b) {
   b.addEventListener('click', function () {
@@ -1356,6 +1432,71 @@ async function buildPdfBlob() {
       doc.text('(no photo attached)', labelX, y);
       doc.setTextColor(20, 20, 20);
       y += 16;
+    } else if (item.type === 'hazard-matrix') {
+      var hazCols = [
+        { key: 'step', header: 'Job Step / Activity' },
+        { key: 'hazard', header: 'Hazard(s)' },
+        { key: 'control', header: 'Control / Mitigation' }
+      ];
+      var hazColW = (maxWidth - 24) / hazCols.length;
+      var hazRows = (item.rows || []).filter(function (r) {
+        return (r.step && r.step.trim()) || (r.hazard && r.hazard.trim()) || (r.control && r.control.trim());
+      });
+      if (!hazRows.length) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(10);
+        doc.setTextColor(138, 146, 155);
+        doc.text('(no hazards listed)', labelX, y);
+        doc.setTextColor(20, 20, 20);
+        y += 16;
+      } else {
+        ensureSpace(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(108, 116, 128);
+        hazCols.forEach(function (col, ci) { doc.text(col.header, labelX + ci * hazColW, y); });
+        doc.setTextColor(20, 20, 20);
+        y += 10;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        hazRows.forEach(function (row) {
+          var cellLines = hazCols.map(function (col) { return doc.splitTextToSize(row[col.key] || '—', hazColW - 10); });
+          var rowH = Math.max.apply(null, cellLines.map(function (lines) { return lines.length; })) * 11 + 6;
+          ensureSpace(rowH);
+          cellLines.forEach(function (lines, ci) { doc.text(lines, labelX + ci * hazColW, y); });
+          y += rowH;
+        });
+        y += 4;
+      }
+    } else if (item.type === 'ppe') {
+      var ppeCols = 3;
+      var ppeColW = (maxWidth - 24) / ppeCols;
+      var checkedPpe = item.checkedPpe || [];
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      for (var pr = 0; pr < PPE_OPTIONS.length; pr += ppeCols) {
+        var ppeRow = PPE_OPTIONS.slice(pr, pr + ppeCols);
+        var ppeCellLines = ppeRow.map(function (label) { return doc.splitTextToSize(label, ppeColW - 16); });
+        var ppeRowH = Math.max.apply(null, ppeCellLines.map(function (l) { return l.length; })) * 10 + 4;
+        ensureSpace(ppeRowH);
+        ppeRow.forEach(function (label, ci) {
+          var cx = labelX + ci * ppeColW;
+          var ppeChecked = checkedPpe.indexOf(label) !== -1;
+          drawPdfCheckbox(doc, cx + 10, y + 8, ppeChecked);
+          doc.setTextColor(ppeChecked ? 15 : 90, ppeChecked ? 95 : 96, ppeChecked ? 50 : 102);
+          doc.text(ppeCellLines[ci], cx + 14, y + 8);
+          doc.setTextColor(20, 20, 20);
+        });
+        y += ppeRowH;
+      }
+      if (item.otherText && item.otherText.trim()) {
+        ensureSpace(14);
+        doc.setFont('helvetica', 'italic');
+        doc.text('Other: ' + item.otherText.trim(), labelX, y);
+        doc.setFont('helvetica', 'normal');
+        y += 14;
+      }
+      y += 4;
     } else if (item.type === 'signoff') {
       var sigBoxW = Math.min(260, maxWidth - 24);
       var hasDrawn = item.mode !== 'type' && !!item.signature;
