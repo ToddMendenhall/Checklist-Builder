@@ -782,17 +782,22 @@
   }
   .ppe-option.checked .ppe-option-check { border-color: var(--good); }
   .ppe-option.checked .ppe-option-check .check-mark { stroke-dashoffset: 0; }
-  .ppe-option-wrap { position: relative; display: inline-flex; }
-  .ppe-custom-remove {
-    position: absolute; top: -6px; right: -6px;
-    width: 18px; height: 18px;
+  /* Every pill (standard and custom) gets a remove button now, so a loud
+     filled badge per pill would be noisy across the full catalog — a small
+     plain "×" alongside the pill, matching the hazard matrix's remove
+     buttons, stays legible without the visual weight. */
+  .ppe-option-wrap { display: inline-flex; align-items: center; gap: 2px; }
+  .ppe-option-remove {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
     border-radius: 50%;
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: transparent;
+    color: var(--ink-soft);
     border: none;
-    font-size: 0.75rem; line-height: 1;
+    font-size: 0.85rem; line-height: 1;
     cursor: pointer;
   }
+  .ppe-option-remove:hover { color: var(--accent); }
   .ppe-other-input {
     display: block;
     width: 100%;

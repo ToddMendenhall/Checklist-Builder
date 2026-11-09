@@ -53,7 +53,7 @@ function defaultResponseFields(type) {
   if (type === 'photo') return { photos: [] };
   if (type === 'section') return { collapsed: false };
   if (type === 'hazard-matrix') return { steps: [{ id: uid(), step: '', entries: [{ id: uid(), hazard: '', control: '' }] }] };
-  if (type === 'ppe') return { checkedPpe: [], customPpe: [] };
+  if (type === 'ppe') return { checkedPpe: [], customPpe: [], removedPpe: [] };
   if (type === 'signoff') {
     var supportsTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     return { mode: supportsTouch ? 'draw' : 'type', signature: null, name: '', date: '' };
@@ -78,6 +78,7 @@ function cloneItem(item) {
   }
   if (copy.checkedPpe) copy.checkedPpe = copy.checkedPpe.slice();
   if (copy.customPpe) copy.customPpe = copy.customPpe.slice();
+  if (copy.removedPpe) copy.removedPpe = copy.removedPpe.slice();
   return copy;
 }
 
@@ -152,6 +153,9 @@ function normalizeItemShape(item) {
     if (legacyOther && item.checkedPpe.indexOf(legacyOther) === -1) item.checkedPpe.push(legacyOther);
     delete item.otherText;
   }
+  if (item.type === 'ppe' && !Array.isArray(item.removedPpe)) {
+    item.removedPpe = [];
+  }
   return item;
 }
 
@@ -214,10 +218,14 @@ var templates;
 
 function templateItemFromItem(item) {
   var templateItem = { id: uid(), label: item.label, type: item.type };
-  // Custom PPE pills are structural (which equipment this JSA calls for), not
-  // a response, so a template preserves them — unchecked, like everything
-  // else a template carries forward.
-  if (item.type === 'ppe' && item.customPpe && item.customPpe.length) templateItem.customPpe = item.customPpe.slice();
+  // Which PPE options this item offers — the custom ones added, and the
+  // standard ones removed — is structural (which equipment this JSA calls
+  // for), not a response, so a template preserves both, unchecked, like
+  // everything else a template carries forward.
+  if (item.type === 'ppe') {
+    if (item.customPpe && item.customPpe.length) templateItem.customPpe = item.customPpe.slice();
+    if (item.removedPpe && item.removedPpe.length) templateItem.removedPpe = item.removedPpe.slice();
+  }
   return templateItem;
 }
 
@@ -243,6 +251,7 @@ function checklistFromTemplate(template) {
         defaultResponseFields(templateItem.type)
       );
       if (templateItem.type === 'ppe' && Array.isArray(templateItem.customPpe)) item.customPpe = templateItem.customPpe.slice();
+      if (templateItem.type === 'ppe' && Array.isArray(templateItem.removedPpe)) item.removedPpe = templateItem.removedPpe.slice();
       return item;
     }),
     locked: !!template.locked
@@ -563,19 +572,12 @@ function itemTemplate(item, num, idx, itemsLen) {
       '</div></div>';
   } else if (item.type === 'ppe') {
     var checkedPpe = item.checkedPpe || [];
-    var customPpe = item.customPpe || [];
+    var removedPpe = item.removedPpe || [];
+    var visiblePpe = PPE_OPTIONS.filter(function (label) { return removedPpe.indexOf(label) === -1; }).concat(item.customPpe || []);
     responseHtml =
       '<div class="item-response">' +
         '<div class="ppe-grid">' +
-          PPE_OPTIONS.map(function (label) {
-            var checked = checkedPpe.indexOf(label) !== -1;
-            return '<button type="button" class="ppe-option' + (checked ? ' checked' : '') + '" ' +
-              'data-action="toggle-ppe" data-id="' + item.id + '" data-label="' + escapeHtml(label) + '" aria-pressed="' + checked + '">' +
-              '<span class="ppe-option-check"><svg viewBox="0 0 24 24" class="check-mark"><path d="M4 12.5 L9.5 18 L20 5" /></svg></span>' +
-              '<span>' + escapeHtml(label) + '</span>' +
-            '</button>';
-          }).join('') +
-          customPpe.map(function (label) {
+          visiblePpe.map(function (label) {
             var checked = checkedPpe.indexOf(label) !== -1;
             return '<div class="ppe-option-wrap">' +
               '<button type="button" class="ppe-option' + (checked ? ' checked' : '') + '" ' +
@@ -583,7 +585,7 @@ function itemTemplate(item, num, idx, itemsLen) {
                 '<span class="ppe-option-check"><svg viewBox="0 0 24 24" class="check-mark"><path d="M4 12.5 L9.5 18 L20 5" /></svg></span>' +
                 '<span>' + escapeHtml(label) + '</span>' +
               '</button>' +
-              '<button type="button" class="ppe-custom-remove" data-action="remove-ppe-custom" data-id="' + item.id + '" data-label="' + escapeHtml(label) + '" aria-label="Remove ' + escapeHtml(label) + '">×</button>' +
+              '<button type="button" class="ppe-option-remove" data-action="remove-ppe-option" data-id="' + item.id + '" data-label="' + escapeHtml(label) + '" aria-label="Remove ' + escapeHtml(label) + '">×</button>' +
             '</div>';
           }).join('') +
         '</div>' +
@@ -853,9 +855,13 @@ itemListEl.addEventListener('click', function (e) {
     var ppeIdx = item.checkedPpe.indexOf(ppeLabel);
     if (ppeIdx === -1) item.checkedPpe.push(ppeLabel); else item.checkedPpe.splice(ppeIdx, 1);
     saveState(); render();
-  } else if (action === 'remove-ppe-custom' && item) {
+  } else if (action === 'remove-ppe-option' && item) {
     var removeLabel = btn.dataset.label;
-    item.customPpe = item.customPpe.filter(function (l) { return l !== removeLabel; });
+    if (PPE_OPTIONS.indexOf(removeLabel) !== -1) {
+      if (item.removedPpe.indexOf(removeLabel) === -1) item.removedPpe.push(removeLabel);
+    } else {
+      item.customPpe = item.customPpe.filter(function (l) { return l !== removeLabel; });
+    }
     var checkedIdx = item.checkedPpe.indexOf(removeLabel);
     if (checkedIdx !== -1) item.checkedPpe.splice(checkedIdx, 1);
     saveState(); render();
@@ -1268,7 +1274,15 @@ itemListEl.addEventListener('keydown', function (e) {
   if (!value) return;
   var item = getActive().items.find(function (i) { return i.id === e.target.dataset.id; });
   if (!item) return;
-  if (PPE_OPTIONS.indexOf(value) === -1 && item.customPpe.indexOf(value) === -1) item.customPpe.push(value);
+  if (PPE_OPTIONS.indexOf(value) !== -1) {
+    // Typing a standard option's exact name back in — most likely they
+    // removed it and want it back — restores it instead of adding a
+    // duplicate custom pill with the same label.
+    var removedIdx = item.removedPpe.indexOf(value);
+    if (removedIdx !== -1) item.removedPpe.splice(removedIdx, 1);
+  } else if (item.customPpe.indexOf(value) === -1) {
+    item.customPpe.push(value);
+  }
   if (item.checkedPpe.indexOf(value) === -1) item.checkedPpe.push(value);
   saveState(); render();
   var freshInput = itemListEl.querySelector('.ppe-other-input[data-id="' + item.id + '"]');
@@ -1606,7 +1620,8 @@ async function buildPdfBlob() {
       var ppeCols = 3;
       var ppeColW = (maxWidth - 24) / ppeCols;
       var checkedPpe = item.checkedPpe || [];
-      var ppeAllOptions = PPE_OPTIONS.concat(item.customPpe || []);
+      var removedPpe = item.removedPpe || [];
+      var ppeAllOptions = PPE_OPTIONS.filter(function (label) { return removedPpe.indexOf(label) === -1; }).concat(item.customPpe || []);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       for (var pr = 0; pr < ppeAllOptions.length; pr += ppeCols) {
