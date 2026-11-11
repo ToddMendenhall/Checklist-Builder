@@ -863,6 +863,7 @@ itemListEl.addEventListener('click', function (e) {
     if (ppeIdx === -1) item.checkedPpe.push(ppeLabel); else item.checkedPpe.splice(ppeIdx, 1);
     saveState(); render();
   } else if (action === 'remove-ppe-option' && item) {
+    if (active.locked) return;
     var removeLabel = btn.dataset.label;
     if (PPE_OPTIONS.indexOf(removeLabel) !== -1) {
       if (item.removedPpe.indexOf(removeLabel) === -1) item.removedPpe.push(removeLabel);
@@ -1277,6 +1278,7 @@ itemListEl.addEventListener('keydown', function (e) {
 itemListEl.addEventListener('keydown', function (e) {
   if (!e.target.classList.contains('ppe-other-input') || e.key !== 'Enter') return;
   e.preventDefault();
+  if (getActive().locked) return;
   var value = e.target.value.trim();
   if (!value) return;
   var item = getActive().items.find(function (i) { return i.id === e.target.dataset.id; });
