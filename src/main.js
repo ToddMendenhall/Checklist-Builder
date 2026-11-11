@@ -159,7 +159,7 @@ function normalizeItemShape(item) {
   return item;
 }
 
-function migratePhotoItems(parsed) {
+function normalizeChecklistItems(parsed) {
   parsed.checklists.forEach(function (checklist) {
     checklist.items.forEach(normalizeItemShape);
   });
@@ -171,7 +171,7 @@ async function loadState() {
     var raw = (await Preferences.get({ key: STORAGE_KEY })).value;
     if (raw) {
       var parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.checklists) && parsed.checklists.length) return migratePhotoItems(parsed);
+      if (parsed && Array.isArray(parsed.checklists) && parsed.checklists.length) return normalizeChecklistItems(parsed);
     }
   } catch (e) { /* storage unavailable or corrupt — fall through */ }
   return defaultState();
@@ -315,7 +315,14 @@ function templateFromRaw(raw) {
     description: (raw && raw.description && String(raw.description)) || '',
     items: (raw && Array.isArray(raw.items) ? raw.items : [])
       .filter(function (item) { return item && typeof item.label === 'string' && typeof item.type === 'string'; })
-      .map(function (item) { return { id: uid(), label: item.label, type: item.type }; }),
+      .map(function (item) {
+        var templateItem = { id: uid(), label: item.label, type: item.type };
+        if (item.type === 'ppe') {
+          if (Array.isArray(item.customPpe)) templateItem.customPpe = item.customPpe.slice();
+          if (Array.isArray(item.removedPpe)) templateItem.removedPpe = item.removedPpe.slice();
+        }
+        return templateItem;
+      }),
     locked: !!(raw && raw.locked)
   };
 }
@@ -781,7 +788,10 @@ checklistTitleInput.addEventListener('input', function () {
   active.title = checklistTitleInput.value;
   saveState();
   var tabLabel = tabBarEl.querySelector('.tab-label[data-id="' + active.id + '"]');
-  if (tabLabel) tabLabel.textContent = active.title || 'Untitled Checklist';
+  if (tabLabel) {
+    var lockBadge = active.locked ? '<span class="tab-lock" title="Locked — item list can\'t be changed">' + LOCK_SVG + '</span>' : '';
+    tabLabel.innerHTML = lockBadge + escapeHtml(active.title || 'Untitled Checklist');
+  }
 });
 projectIdInput.addEventListener('input', function () { getActive().projectId = projectIdInput.value; saveState(); });
 inspectorInput.addEventListener('input', function () { getActive().inspector = inspectorInput.value; saveState(); });
@@ -1346,6 +1356,8 @@ function wireClearResponsesButton(btn, onConfirmed) {
       if (i.type === 'text') i.text = '';
       if (i.type === 'photo') i.photos = [];
       if (i.type === 'signoff') { i.signature = null; i.name = ''; i.date = ''; }
+      if (i.type === 'hazard-matrix') i.steps = defaultResponseFields('hazard-matrix').steps;
+      if (i.type === 'ppe') i.checkedPpe = [];
     });
     saveState(); render();
     if (onConfirmed) onConfirmed();
