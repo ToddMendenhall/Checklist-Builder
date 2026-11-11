@@ -714,17 +714,33 @@
   }
   .hazard-field::placeholder { color: var(--ink-soft); }
   .hazard-field:focus { outline: none; border-color: var(--line-strong); }
-  .hazard-step-remove, .hazard-entry-remove, .hazard-entry-remove-spacer { flex-shrink: 0; width: 22px; height: 22px; }
+  .hazard-step-remove { flex-shrink: 0; width: 22px; height: 22px; }
+  /* Right-side actions for one hazard/control row: the delete (×), and, only
+     on the last row (adding a hazard always appends a new row), the add (+)
+     stacked directly beneath it — inline with the row, replacing the old
+     full-width "+ Add hazard" button that sat below the whole matrix. */
+  .hazard-entry-actions { flex-shrink: 0; width: 22px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .hazard-entry-remove, .hazard-entry-remove-spacer, .hazard-add-entry { width: 22px; height: 22px; }
   .hazard-step-remove, .hazard-entry-remove {
     border-radius: 50%;
     background: transparent;
-    color: var(--ink-soft);
+    color: var(--accent);
     border: none;
     font-size: 0.9rem;
     cursor: pointer;
   }
-  .hazard-step-remove:hover, .hazard-entry-remove:hover { color: var(--accent); }
-  .hazard-add-entry, .hazard-add-step {
+  .hazard-step-remove:hover, .hazard-entry-remove:hover { background: var(--surface-subtle); }
+  .hazard-add-entry {
+    border-radius: 50%;
+    background: transparent;
+    color: var(--good);
+    border: none;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .hazard-add-entry:hover { background: var(--surface-subtle); }
+  .hazard-add-step {
     display: inline-block;
     font-family: 'Source Sans 3', sans-serif;
     font-size: 0.8rem;
@@ -735,14 +751,13 @@
     padding: 7px 12px;
     cursor: pointer;
   }
-  .hazard-add-entry:hover, .hazard-add-step:hover { color: var(--primary); border-color: var(--primary); }
-  .hazard-add-entry { align-self: flex-start; }
+  .hazard-add-step:hover { color: var(--primary); border-color: var(--primary); }
   @media (max-width: 559px) {
     .hazard-matrix-head { display: none; }
     .hazard-step { flex-direction: column; gap: 10px; }
     .hazard-step-label { flex-basis: auto; }
     .hazard-entry { flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-    .hazard-entry-remove { align-self: flex-end; width: auto; padding: 2px 8px; border-radius: var(--radius-sm); }
+    .hazard-entry-actions { flex-direction: row; align-self: flex-end; width: auto; gap: 10px; }
     .hazard-entry-remove-spacer { display: none; }
   }
 

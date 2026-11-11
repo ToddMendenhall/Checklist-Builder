@@ -555,16 +555,21 @@ function itemTemplate(item, num, idx, itemsLen) {
               '<textarea class="hazard-field" data-action="hazard-step-field" data-id="' + item.id + '" data-step-id="' + step.id + '" rows="1" placeholder="Job step / activity">' + escapeHtml(step.step || '') + '</textarea>' +
             '</div>' +
             '<div class="hazard-entries">' +
-              entries.map(function (entry) {
+              entries.map(function (entry, entryIndex) {
+                var isLastEntry = entryIndex === entries.length - 1;
                 return '<div class="hazard-entry">' +
                   '<textarea class="hazard-field" data-action="hazard-entry-field" data-field="hazard" data-id="' + item.id + '" data-step-id="' + step.id + '" data-entry-id="' + entry.id + '" rows="1" placeholder="Hazard(s)">' + escapeHtml(entry.hazard || '') + '</textarea>' +
                   '<textarea class="hazard-field" data-action="hazard-entry-field" data-field="control" data-id="' + item.id + '" data-step-id="' + step.id + '" data-entry-id="' + entry.id + '" rows="1" placeholder="Control / mitigation">' + escapeHtml(entry.control || '') + '</textarea>' +
-                  (entries.length > 1
-                    ? '<button type="button" class="hazard-entry-remove" data-action="remove-hazard-entry" data-id="' + item.id + '" data-step-id="' + step.id + '" data-entry-id="' + entry.id + '" aria-label="Remove hazard">×</button>'
-                    : '<span class="hazard-entry-remove-spacer"></span>') +
+                  '<div class="hazard-entry-actions">' +
+                    (entries.length > 1
+                      ? '<button type="button" class="hazard-entry-remove" data-action="remove-hazard-entry" data-id="' + item.id + '" data-step-id="' + step.id + '" data-entry-id="' + entry.id + '" aria-label="Remove hazard">×</button>'
+                      : '<span class="hazard-entry-remove-spacer"></span>') +
+                    (isLastEntry
+                      ? '<button type="button" class="hazard-add-entry" data-action="add-hazard-entry" data-id="' + item.id + '" data-step-id="' + step.id + '" aria-label="Add hazard">＋</button>'
+                      : '') +
+                  '</div>' +
                 '</div>';
               }).join('') +
-              '<button type="button" class="hazard-add-entry" data-action="add-hazard-entry" data-id="' + item.id + '" data-step-id="' + step.id + '">＋ Add hazard</button>' +
             '</div>' +
           '</div>';
         }).join('') +
