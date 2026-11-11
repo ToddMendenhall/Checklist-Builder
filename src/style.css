@@ -378,9 +378,14 @@
   .item-list { list-style: none; margin: 0; padding: 0; }
 
   /* Locked: item structure is frozen (no add/remove/reorder) but responses —
-     checkboxes, text, photos, signatures — stay fully editable. */
+     checkboxes, text, photos, signatures — stay fully editable. A PPE item's
+     catalog (which standard options are removed, which custom ones are added)
+     counts as structure too, so it freezes along with the item list; which
+     pills are checked is still a response and stays editable. */
   .item-list.locked .item-menu-wrap,
-  .item-list.locked .drag-handle {
+  .item-list.locked .drag-handle,
+  .item-list.locked .ppe-option-remove,
+  .item-list.locked .ppe-other-input {
     visibility: hidden;
     pointer-events: none;
   }
