@@ -396,7 +396,6 @@ function collectionFromFileText(text) {
 
 var itemListEl = document.getElementById('itemList');
 var tabBarEl = document.getElementById('tabBar');
-var collectionTitleInput = document.getElementById('collectionTitleInput');
 var checklistTitleInput = document.getElementById('checklistTitleInput');
 var projectIdInput = document.getElementById('projectIdInput');
 var inspectorInput = document.getElementById('inspectorInput');
@@ -679,7 +678,6 @@ function autoResizeTextarea(el) {
 }
 
 function render() {
-  collectionTitleInput.value = state.collectionTitle;
   document.title = state.collectionTitle || 'Checklist Collection';
 
   renderTabs();
@@ -773,12 +771,6 @@ function setupSignatureCanvases() {
     }
   });
 }
-
-collectionTitleInput.addEventListener('input', function () {
-  state.collectionTitle = collectionTitleInput.value;
-  document.title = state.collectionTitle || 'Checklist Collection';
-  saveState();
-});
 checklistTitleInput.addEventListener('input', function () {
   var active = getActive();
   active.title = checklistTitleInput.value;
@@ -1456,18 +1448,7 @@ async function buildPdfBlob() {
     y += 16;
   }
 
-  if (state.collectionTitle) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(108, 116, 128);
-    doc.text(state.collectionTitle, marginX, y);
-    doc.setTextColor(20, 20, 20);
-    y += 16;
-  } else {
-    y += 4;
-  }
-
-  y += 12; // blank line between the collection name and the checklist name
+  y += 16; // blank line between the logo and the checklist name
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(19);
@@ -1478,7 +1459,7 @@ async function buildPdfBlob() {
   doc.setFontSize(9.5);
   var metaParts = [];
   if (active.projectId) metaParts.push('Project ID: ' + active.projectId);
-  if (active.inspector) metaParts.push('Inspector: ' + active.inspector);
+  if (active.inspector) metaParts.push('Technician: ' + active.inspector);
   if (active.date) metaParts.push('Date: ' + active.date);
   metaParts.push('Generated: ' + new Date().toLocaleString());
   doc.setTextColor(108, 116, 128);
