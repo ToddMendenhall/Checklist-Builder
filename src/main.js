@@ -7,6 +7,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { save as saveFileDialog } from '@tauri-apps/plugin-dialog';
 import { writeFile as writeTauriFile } from '@tauri-apps/plugin-fs';
 import { jsPDF } from 'jspdf';
+import defaultTemplatesPack from './default-templates.json';
 
 // Only register the offline-cache service worker on the deployed web/PWA build —
 // Tauri and Capacitor already load the app from a local bundle, not a real
@@ -195,18 +196,42 @@ function getActive() {
   return found || state.checklists[0];
 }
 
+// Templates the app ships with — shown in every install's Template Library
+// alongside anyone's own. To change the set, replace this file's contents with
+// a fresh "Export all templates…" file (same checklist-collection-template-pack
+// shape); reconcileDefaultTemplates below picks up the new set on the next load.
+function defaultTemplateList() {
+  return (defaultTemplatesPack.templates || []).map(function (raw) {
+    var t = templateFromRaw(raw);
+    t.isDefault = true;
+    return t;
+  });
+}
+
+// Keeps the bundled defaults in sync with default-templates.json on every load:
+// whatever's currently in the bundle replaces whatever bundled templates were
+// stored before (added, changed, or dropped), every time — so editing one of
+// these directly doesn't stick across a reload; duplicating it under a new
+// name (via a checklist made from it, then "Save as template") does. Templates
+// the user created themselves (never flagged isDefault) are left untouched.
+function reconcileDefaultTemplates(stored) {
+  var userTemplates = stored.filter(function (t) { return !t.isDefault; });
+  return defaultTemplateList().concat(userTemplates);
+}
+
 // A template holds only checklist structure (title/description/items with their
 // labels and types) — never response values — so it can be reused to start fresh
 // checklists without carrying over anyone's filled-in answers.
 async function loadTemplates() {
+  var stored = [];
   try {
     var raw = (await Preferences.get({ key: TEMPLATES_KEY })).value;
     if (raw) {
       var parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) stored = parsed;
     }
   } catch (e) { /* storage unavailable or corrupt — fall through */ }
-  return [];
+  return reconcileDefaultTemplates(stored);
 }
 
 function saveTemplates() {
@@ -1908,10 +1933,13 @@ function templateCardHtml(t) {
   var count = t.items.length;
   var deleteArmed = templateDeleteArmedId === t.id;
   var lockBadge = t.locked ? '<span class="tab-lock" title="Locked — checklists made from this template start locked">' + LOCK_SVG + '</span>' : '';
+  var defaultBadge = t.isDefault
+    ? '<span class="template-default-badge" title="Ships with the app and is refreshed to the shipped version each time the app loads — edits here won’t be kept">Default</span>'
+    : '';
   return (
     '<div class="template-card" data-id="' + t.id + '">' +
       '<div class="template-card-main">' +
-        '<div class="template-card-title">' + lockBadge + escapeHtml(t.title || 'Untitled Template') + '</div>' +
+        '<div class="template-card-title">' + lockBadge + escapeHtml(t.title || 'Untitled Template') + defaultBadge + '</div>' +
         (t.description ? '<div class="template-card-desc">' + escapeHtml(t.description) + '</div>' : '') +
         '<div class="template-card-meta">' + count + (count === 1 ? ' item' : ' items') + '</div>' +
       '</div>' +

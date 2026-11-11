@@ -1106,6 +1106,20 @@
     font-size: 1.05rem;
     color: var(--ink);
   }
+  .template-default-badge {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 500;
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
   .template-card-desc {
     margin-top: 3px;
     font-size: 0.88rem;
