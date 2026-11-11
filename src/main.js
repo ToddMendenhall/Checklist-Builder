@@ -1466,9 +1466,12 @@ async function buildPdfBlob() {
   if (active.projectId) metaParts.push('Project ID: ' + active.projectId);
   if (active.inspector) metaParts.push('Technician: ' + active.inspector);
   if (active.date) metaParts.push('Date: ' + active.date);
-  metaParts.push('Generated: ' + new Date().toLocaleString());
   doc.setTextColor(108, 116, 128);
-  doc.text(metaParts.join('     '), marginX, y);
+  if (metaParts.length) {
+    doc.text(metaParts.join('     '), marginX, y);
+    y += 14;
+  }
+  doc.text('Generated: ' + new Date().toLocaleString(), marginX, y);
   doc.setTextColor(20, 20, 20);
   y += 12;
 
